@@ -9,6 +9,7 @@ import {
 } from "react";
 import { createWorker } from "tesseract.js";
 import { parseOcr } from "@/lib/parser";
+import { saveBookToCloud } from "@/lib/bookService";
 
 interface WordType {
   partOfSpeech: string;
@@ -268,7 +269,7 @@ export default function OcrImporter({
     });
   }
 
-  function importSelectedWords() {
+  async function importSelectedWords() {
     const existingWords = new Set(
       book.words.map((word) => word.english.toLowerCase())
     );
@@ -307,6 +308,13 @@ export default function OcrImporter({
 
     localStorage.setItem("wordnest-books", JSON.stringify(updatedBooks));
     setBook(updatedBook);
+    localStorage.setItem("wordnest-books", JSON.stringify(updatedBooks));
+
+setBook(updatedBook);
+
+await saveBookToCloud(updatedBook);
+
+alert(`✅ 已加入 ${newWords.length} 個單字。`);
 
     alert(`✅ 已加入 ${newWords.length} 個單字。`);
 
