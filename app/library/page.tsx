@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-
+import {
+  deleteBookFromCloud,
+  getBooks,
+  getBooksFromCloud,
+  saveBookToCloud,
+  saveBooks,
+} from "@/lib/bookService";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 
 
@@ -26,6 +34,7 @@ export default function LibraryPage() {
     const router = useRouter();
   const [books, setBooks] = useState<any[]>([]);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [name, setName] = useState("");
   const [editingBookId, setEditingBookId] = useState<string | null>(null);
 const [editingBookName, setEditingBookName] = useState("");
@@ -35,46 +44,61 @@ const [partOfSpeech, setPartOfSpeech] = useState("");
 const [meaning, setMeaning] = useState("");
 const [showAddWord, setShowAddWord] = useState(false);
   useEffect(() => {
-  const savedBooks = localStorage.getItem("wordnest-books");
-
-  if (savedBooks) {
-    try {
-      setBooks(JSON.parse(savedBooks));
-    } catch {
-      setBooks([]);
-    }
-  }
-
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+  setIsLoggedIn(false);
+  setBooks([]);
   setHasLoaded(true);
+  return;
+}
+
+setIsLoggedIn(true);
+
+    const cloudBooks = await getBooksFromCloud<Book>();
+
+    if (cloudBooks.length > 0) {
+      setBooks(cloudBooks);
+    } else {
+      setBooks(getBooks<Book>());
+    }
+
+    setHasLoaded(true);
+  });
+
+  return unsubscribe;
 }, []);
 
   useEffect(() => {
   if (!hasLoaded) return;
 
-  localStorage.setItem(
-    "wordnest-books",
-    JSON.stringify(books)
-  );
+  saveBooks(books);
 }, [books, hasLoaded]);
 
-  function addBook() {
-    if (!name.trim()) return;
+  async function addBook() {
+  if (!name.trim()) return;
 
-    const newBook: Book = {
-      id: crypto.randomUUID(),
-      name: name.trim(),
-      words: [],
-    };
+  const newBook: Book = {
+    id: crypto.randomUUID(),
+    name: name.trim(),
+    words: [],
+  };
 
-    setBooks([...books, newBook]);
-    setName("");
-  }
+  setBooks([...books, newBook]);
 
-  function deleteBook(id: string) {
-    setBooks(
-      books.filter((book) => book.id !== id)
-    );
-  }
+  await saveBookToCloud(newBook);
+
+  setName("");
+}
+
+  async function deleteBook(id: string) {
+  const updatedBooks = books.filter(
+    (book) => book.id !== id
+  );
+
+  setBooks(updatedBooks);
+
+  await deleteBookFromCloud(id);
+}
   function startRenameBook(book: Book) {
   setEditingBookId(book.id);
   setEditingBookName(book.name);
@@ -193,10 +217,18 @@ if (updatedBook !== undefined) {
   </div>
 )}
         {books.length === 0 ? (
-          <p className="text-gray-500">
-            尚未建立教材
-          </p>
-        ) : (
+  <div className="text-center py-10">
+    {isLoggedIn ? (
+      <p className="text-gray-500">
+        尚未建立教材
+      </p>
+    ) : (
+      <p className="text-gray-500">
+        請先登入 Google 後查看教材
+      </p>
+    )}
+  </div>
+) : (
           <div className="space-y-4">
             {books.map((book) => (
   <div

@@ -26,6 +26,8 @@ interface WordCardProps {
   onEdit: (word: Word) => void;
   onDelete: (wordId: string) => void;
   onGenerateAI: (word: Word) => void | Promise<void>;
+    isGenerating?: boolean;
+  generatingWord?: string;
 }
 
 export default function WordCard({
@@ -34,6 +36,8 @@ export default function WordCard({
   onEdit,
   onDelete,
   onGenerateAI,
+  isGenerating,
+  generatingWord,
 }: WordCardProps) {
   const sentenceCount = word.aiSentences?.length ?? 0;
   const hasAiSentences = sentenceCount > 0;
@@ -102,12 +106,22 @@ export default function WordCard({
         </button>
 
         <button
-          type="button"
-          onClick={() => onGenerateAI(word)}
-          className="rounded-xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
-        >
-          🤖 {hasAiSentences ? "重建 AI" : "建立 AI"}
-        </button>
+  type="button"
+  disabled={
+    isGenerating &&
+    generatingWord === word.english
+  }
+  onClick={() => onGenerateAI(word)}
+  className="rounded-xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
+>
+  🤖
+  {isGenerating &&
+  generatingWord === word.english
+    ? "建立中..."
+    : hasAiSentences
+      ? "重建 AI"
+      : "建立 AI"}
+</button>
 
         <button
           type="button"

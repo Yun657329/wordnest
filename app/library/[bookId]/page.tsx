@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { generateSentences } from "@/lib/ai";
 import WordCard from "@/components/WordCard";
 import OcrImporter from "@/components/OcrImporter";
-
+import { getBook } from "@/lib/bookService";
+import { saveBookToCloud } from "@/lib/bookService";
 interface WordType {
   partOfSpeech: string;
   meanings: string[];
@@ -33,6 +34,8 @@ interface Book {
 export default function BookPage() {
   const [book, setBook] = useState<Book | null>(null);
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
+  const [isGeneratingOne, setIsGeneratingOne] = useState(false);
+const [generatingWord, setGeneratingWord] = useState("");
 const [currentWord, setCurrentWord] = useState("");
 const [progress, setProgress] = useState(0);
 const [total, setTotal] = useState(0);
@@ -56,27 +59,25 @@ const [total, setTotal] = useState(0);
 
 
   useEffect(() => {
-    const savedBooks = localStorage.getItem("wordnest-books");
+  const id = window.location.pathname.split("/").pop();
 
-    if (!savedBooks) return;
+  if (!id) return;
 
-    const books: Book[] = JSON.parse(savedBooks);
+  const foundBook = getBook<Book>(id);
 
-    const id = window.location.pathname.split("/").pop();
+  if (!foundBook) return;
 
-    const foundBook = books.find(
-      (item) => item.id === id
-    );
+  const normalizedBook: Book = {
+    ...foundBook,
+    words: foundBook.words.map((word) => ({
+      ...word,
+      favorite: word.favorite ?? false,
+      aiSentences: word.aiSentences ?? [],
+    })),
+  };
 
-    if (foundBook) {
-  foundBook.words = foundBook.words.map((word) => ({
-    ...word,
-    favorite: word.favorite ?? false,
-  }));
-
-  setBook(foundBook);
-}
-  }, []);
+  setBook(normalizedBook);
+}, []);
 function addType() {
   setTypes([
     ...types,
@@ -107,43 +108,10 @@ function editWord(word: Word) {
 
   setShowForm(true);
 }
-function toggleFavorite(wordId: string) {
+async function toggleFavorite(wordId: string) {
   if (!book) return;
 
-  const savedBooks = localStorage.getItem(
-    "wordnest-books"
-  );
-
-  if (!savedBooks) return;
-
-  const books: Book[] = JSON.parse(savedBooks);
-
-  const updatedBooks = books.map((item) => {
-    if (item.id === book.id) {
-      return {
-        ...item,
-        words: item.words.map((word) =>
-          word.id === wordId
-            ? {
-                ...word,
-                favorite: !word.favorite,
-              }
-            : word
-        ),
-      };
-    }
-
-    return item;
-  });
-
-
-  localStorage.setItem(
-    "wordnest-books",
-    JSON.stringify(updatedBooks)
-  );
-
-
-  setBook({
+  const updatedBook = {
     ...book,
     words: book.words.map((word) =>
       word.id === wordId
@@ -153,45 +121,59 @@ function toggleFavorite(wordId: string) {
           }
         : word
     ),
-  });
+  };
+
+  const savedBooks = localStorage.getItem("wordnest-books");
+
+  if (savedBooks) {
+    const books: Book[] = JSON.parse(savedBooks);
+
+    const updatedBooks = books.map((item) =>
+      item.id === book.id ? updatedBook : item
+    );
+
+    localStorage.setItem(
+      "wordnest-books",
+      JSON.stringify(updatedBooks)
+    );
+  }
+
+  setBook(updatedBook);
+
+  await saveBookToCloud(updatedBook);
 }
-function deleteWord(wordId: string) {
+async function deleteWord(wordId: string) {
   if (!book) return;
+
+  const updatedBook = {
+    ...book,
+    words: book.words.filter(
+      (word) => word.id !== wordId
+    ),
+  };
 
   const savedBooks = localStorage.getItem(
     "wordnest-books"
   );
 
-  if (!savedBooks) return;
+  if (savedBooks) {
+    const books: Book[] = JSON.parse(savedBooks);
 
-  const books: Book[] = JSON.parse(savedBooks);
+    const updatedBooks = books.map((item) =>
+      item.id === book.id ? updatedBook : item
+    );
 
-  const updatedBooks = books.map((item) => {
-    if (item.id === book.id) {
-      return {
-        ...item,
-        words: item.words.filter(
-          (word) => word.id !== wordId
-        ),
-      };
-    }
+    localStorage.setItem(
+      "wordnest-books",
+      JSON.stringify(updatedBooks)
+    );
+  }
 
-    return item;
-  });
+  setBook(updatedBook);
 
-  localStorage.setItem(
-    "wordnest-books",
-    JSON.stringify(updatedBooks)
-  );
-
-  setBook({
-    ...book,
-    words: book.words.filter(
-      (word) => word.id !== wordId
-    ),
-  });
+  await saveBookToCloud(updatedBook);
 }
-  function saveWord() {
+  async function saveWord() {
   if (!book) return;
 
   if (
@@ -256,16 +238,17 @@ function deleteWord(wordId: string) {
     JSON.stringify(updatedBooks)
   );
 
-  setBook({
-    ...book,
-    words: editingId
-      ? book.words.map((word) =>
-          word.id === editingId
-            ? newWord
-            : word
-        )
-      : [...book.words, newWord],
-  });
+  const updatedBook = {
+  ...book,
+  words: editingId
+    ? book.words.map((word) =>
+        word.id === editingId ? newWord : word
+      )
+    : [...book.words, newWord],
+};
+
+setBook(updatedBook);
+await saveBookToCloud(updatedBook);
 
   setEnglish("");
   setTypes([
@@ -279,7 +262,8 @@ function deleteWord(wordId: string) {
 }
 async function generateAiForWord(word: Word) {
   if (!book) return;
-
+setIsGeneratingOne(true);
+setGeneratingWord(word.english);
   try {
     const meanings: string[] = [];
 
@@ -328,10 +312,16 @@ async function generateAiForWord(word: Word) {
 
     setBook(updatedBook);
 
-    alert(`✅ ${word.english} 的 AI 題庫建立完成！`);
+await saveBookToCloud(updatedBook);
+
+setIsGeneratingOne(false);
+setGeneratingWord("");
+
+alert(`✅ ${word.english} 的 AI 題庫建立完成！`);
   } catch (error) {
     console.error("建立 AI 題庫失敗：", error);
-
+setIsGeneratingOne(false);
+setGeneratingWord("");
     const message =
       error instanceof Error
         ? error.message
@@ -341,7 +331,6 @@ async function generateAiForWord(word: Word) {
   }
 }
 async function generateAllAiSentences() {
-     alert("generateAllAiSentences 開始");
   if (!book) return;
 setIsGeneratingAll(true);
 setCurrentWord("");
@@ -405,13 +394,16 @@ for (const word of updatedBook.words) {
   );
 
   setBook({ ...updatedBook });
+
+await saveBookToCloud(updatedBook);
+
 setCurrentWord("");
 setIsGeneratingAll(false);
   alert(
   `✅ AI 題庫檢查完成！\n新建立：${created} 個\n原本已有題庫：${skipped} 個`
 );
 }
-function clearAllAiSentences() {
+async function clearAllAiSentences() {
   if (!book) return;
 
   const ok = confirm(
@@ -445,7 +437,9 @@ function clearAllAiSentences() {
 
   setBook(updatedBook);
 
-  alert("✅ 已清空全部 AI 題庫");
+await saveBookToCloud(updatedBook);
+
+alert("✅ 已清空全部 AI 題庫");
 }
   if (!book) {
     return (
@@ -502,6 +496,21 @@ function clearAllAiSentences() {
     </p>
   </div>
 )}
+{isGeneratingOne && (
+  <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 mb-4">
+    <div className="font-semibold">
+      🤖 正在重新建立 AI 題庫...
+    </div>
+
+    <div className="mt-2">
+      單字：{generatingWord}
+    </div>
+
+    <div className="text-sm text-gray-600 mt-1">
+      請稍候，不要重複點擊按鈕。
+    </div>
+  </div>
+)}
         <button
   onClick={generateAllAiSentences}
   disabled={isGeneratingAll}
@@ -526,13 +535,15 @@ function clearAllAiSentences() {
           ) : (
             book.words.map((word) => (
               <WordCard
-                key={word.id}
-                word={word}
-                onToggleFavorite={toggleFavorite}
-                onEdit={editWord}
-                onDelete={deleteWord}
-                onGenerateAI={generateAiForWord}
-              />
+  key={word.id}
+  word={word}
+  onToggleFavorite={toggleFavorite}
+  onEdit={editWord}
+  onDelete={deleteWord}
+  onGenerateAI={generateAiForWord}
+  isGenerating={isGeneratingOne}
+  generatingWord={generatingWord}
+/>
             ))
           )}
         </div>
