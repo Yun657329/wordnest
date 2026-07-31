@@ -270,64 +270,75 @@ export default function OcrImporter({
   }
 
   async function importSelectedWords() {
-    const existingWords = new Set(
-      book.words.map((word) => word.english.toLowerCase())
-    );
+  const existingWords = new Set(
+    book.words.map((word) => word.english.toLowerCase())
+  );
 
-    const wordsToAdd = parsedWords.filter(
-      (word) =>
-        selectedIds.has(word.id) &&
-        !existingWords.has(word.english.toLowerCase())
-    );
+  const wordsToAdd = parsedWords.filter(
+    (word) =>
+      selectedIds.has(word.id) &&
+      !existingWords.has(word.english.toLowerCase())
+  );
 
-    if (wordsToAdd.length === 0) {
-      alert("沒有可加入的新單字。");
-      return;
-    }
-
-    const newWords: Word[] = wordsToAdd.map((word) => ({
-      id: crypto.randomUUID(),
-      english: word.english,
-      types: word.types,
-      favorite: false,
-      aiSentences: [],
-    }));
-
-    const updatedBook: Book = {
-      ...book,
-      words: [...book.words, ...newWords],
-    };
-
-    const savedBooks: Book[] = JSON.parse(
-      localStorage.getItem("wordnest-books") || "[]"
-    );
-
-    const updatedBooks = savedBooks.map((item) =>
-      item.id === book.id ? updatedBook : item
-    );
-
-    localStorage.setItem("wordnest-books", JSON.stringify(updatedBooks));
-    setBook(updatedBook);
-    localStorage.setItem("wordnest-books", JSON.stringify(updatedBooks));
-
-setBook(updatedBook);
-
-await saveBookToCloud(updatedBook);
-
-alert(`✅ 已加入 ${newWords.length} 個單字。`);
-
-    alert(`✅ 已加入 ${newWords.length} 個單字。`);
-
-    setImageFile(null);
-    clearResults();
-
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-      setPreviewUrl("");
-    }
-
-    setIsOpen(false);
+  if (wordsToAdd.length === 0) {
+    alert("沒有可加入的新單字。");
+    return;
   }
+
+  const newWords: Word[] = wordsToAdd.map((word) => ({
+    id: crypto.randomUUID(),
+    english: word.english,
+    types: word.types,
+    favorite: false,
+    aiSentences: [],
+  }));
+
+  const updatedBook: Book = {
+    ...book,
+    words: [...book.words, ...newWords],
+  };
+
+  const savedBooks: Book[] = JSON.parse(
+    localStorage.getItem("wordnest-books") || "[]"
+  );
+
+  const bookAlreadyExists = savedBooks.some(
+    (item) => item.id === updatedBook.id
+  );
+
+  const updatedBooks = bookAlreadyExists
+    ? savedBooks.map((item) =>
+        item.id === updatedBook.id ? updatedBook : item
+      )
+    : [...savedBooks, updatedBook];
+
+  localStorage.setItem(
+    "wordnest-books",
+    JSON.stringify(updatedBooks)
+  );
+
+  setBook(updatedBook);
+
+  try {
+    await saveBookToCloud(updatedBook);
+  } catch (error) {
+    console.error("OCR 雲端同步失敗：", error);
+    alert("單字已暫存在手機，但同步到雲端失敗。");
+    return;
+  }
+
+  alert(`✅ 已加入並同步 ${newWords.length} 個單字。`);
+
+  setImageFile(null);
+  clearResults();
+
+  if (previewUrl) {
+    URL.revokeObjectURL(previewUrl);
+    setPreviewUrl("");
+  }
+
+  setIsOpen(false);
+}
 
   const existingCount = parsedWords.filter((word) =>
     book.words.some(
