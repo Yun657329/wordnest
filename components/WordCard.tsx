@@ -66,6 +66,30 @@ export default function WordCard({
   const sentenceCount = word.aiSentences?.length ?? 0;
   const hasAiSentences = sentenceCount > 0;
 
+  function speakWord() {
+  if (!("speechSynthesis" in window)) {
+  console.error("這個瀏覽器不支援發音功能");
+  return;
+}
+
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(word.english);
+  utterance.lang = "en-US";
+  utterance.rate = 0.9;
+
+  const voices = window.speechSynthesis.getVoices();
+
+  const americanVoice = voices.find(
+    (voice) => voice.lang === "en-US"
+  );
+
+  if (americanVoice) {
+    utterance.voice = americanVoice;
+  }
+
+  window.speechSynthesis.speak(utterance);
+}
   function startEditing() {
     setEditEnglish(word.english);
 
@@ -297,9 +321,21 @@ export default function WordCard({
             {word.favorite ? "★" : "☆"}
           </button>
 
-          <h2 className="truncate text-xl font-bold text-slate-900">
-            {word.english}
-          </h2>
+          <div className="flex min-w-0 items-center gap-2">
+  <h2 className="truncate text-xl font-bold text-slate-900">
+    {word.english}
+  </h2>
+
+  <button
+    type="button"
+    onClick={speakWord}
+    className="shrink-0 text-lg transition hover:scale-110"
+    title="播放美式發音"
+    aria-label={`播放 ${word.english} 的美式發音`}
+  >
+    🔊
+  </button>
+</div>
         </div>
 
         <span

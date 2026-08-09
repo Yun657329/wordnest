@@ -28,6 +28,7 @@ interface Book {
   id: string;
   name: string;
   words: Word[];
+  lastOpenedAt?: number;
 }
 
 export default function LibraryPage() {
@@ -230,7 +231,13 @@ if (updatedBook !== undefined) {
   </div>
 ) : (
           <div className="space-y-4">
-            {books.map((book) => (
+            {[...books]
+  .sort(
+    (a, b) =>
+      (b.lastOpenedAt ?? 0) -
+      (a.lastOpenedAt ?? 0)
+  )
+  .map((book) => (
   <div
     key={book.id}
     className="rounded-2xl border p-4"

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { generateSentences } from "@/lib/ai";
 import WordCard from "@/components/WordCard";
 import OcrImporter from "@/components/OcrImporter";
+import { auth } from "@/lib/firebase";
 import {
   getBook,
   saveBook,
@@ -33,6 +34,7 @@ interface Book {
   id: string;
   name: string;
   words: Word[];
+  lastOpenedAt?: number;
 }
 export default function BookPage() {
   const [book, setBook] = useState<Book | null>(null);
@@ -62,7 +64,7 @@ const [total, setTotal] = useState(0);
   ]);
 
 
-  useEffect(() => {
+ useEffect(() => {
   const id = window.location.pathname.split("/").pop();
 
   if (!id) return;
@@ -73,6 +75,7 @@ const [total, setTotal] = useState(0);
 
   const normalizedBook: Book = {
     ...foundBook,
+    lastOpenedAt: Date.now(),
     words: foundBook.words.map((word) => ({
       ...word,
       favorite: word.favorite ?? false,
@@ -81,6 +84,12 @@ const [total, setTotal] = useState(0);
   };
 
   setBook(normalizedBook);
+
+saveBook(normalizedBook);
+
+if (auth.currentUser) {
+  saveBookToCloud(normalizedBook);
+}
 }, []);
 function addType() {
   setTypes([
