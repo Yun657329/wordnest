@@ -3,8 +3,11 @@ import { useEffect, useState } from "react";
 import { generateSentences } from "@/lib/ai";
 import WordCard from "@/components/WordCard";
 import OcrImporter from "@/components/OcrImporter";
-import { getBook } from "@/lib/bookService";
-import { saveBookToCloud } from "@/lib/bookService";
+import {
+  getBook,
+  saveBook,
+  saveBookToCloud,
+} from "@/lib/bookService";
 interface WordType {
   partOfSpeech: string;
   meanings: string[];
@@ -33,6 +36,7 @@ interface Book {
 }
 export default function BookPage() {
   const [book, setBook] = useState<Book | null>(null);
+  const [editingWordId, setEditingWordId] = useState<string | null>(null);
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const [isGeneratingOne, setIsGeneratingOne] = useState(false);
 const [generatingWord, setGeneratingWord] = useState("");
@@ -259,6 +263,28 @@ await saveBookToCloud(updatedBook);
   ]);
   setEditingId(null);
   setShowForm(false);
+}
+async function saveInlineWord(updatedWord: Word) {
+  if (!book) return;
+
+  const updatedBook: Book = {
+    ...book,
+    words: book.words.map((word) =>
+      word.id === updatedWord.id ? updatedWord : word
+    ),
+  };
+
+  setBook(updatedBook);
+
+  saveBook(updatedBook);
+
+  try {
+    await saveBookToCloud(updatedBook);
+  } catch (error) {
+    console.error("同步到 Firebase 失敗：", error);
+  }
+
+  setEditingWordId(null);
 }
 async function generateAiForWord(word: Word) {
   if (!book) return;
@@ -543,6 +569,10 @@ alert("✅ 已清空全部 AI 題庫");
   onGenerateAI={generateAiForWord}
   isGenerating={isGeneratingOne}
   generatingWord={generatingWord}
+
+  isEditing={editingWordId === word.id}
+  setEditingWordId={setEditingWordId}
+  saveInlineWord={saveInlineWord}
 />
             ))
           )}
