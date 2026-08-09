@@ -306,7 +306,7 @@ export default function WordCard({
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <button
             type="button"
             onClick={() => onToggleFavorite(word.id)}
@@ -322,9 +322,9 @@ export default function WordCard({
           </button>
 
           <div className="flex min-w-0 items-center gap-2">
-  <h2 className="truncate text-xl font-bold text-slate-900">
-    {word.english}
-  </h2>
+  <h2 className="break-words text-xl font-bold text-slate-900">
+  {word.english}
+</h2>
 
   <button
     type="button"
