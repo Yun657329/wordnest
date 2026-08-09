@@ -305,7 +305,7 @@ export default function WordCard({
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <button
             type="button"
@@ -339,7 +339,7 @@ export default function WordCard({
         </div>
 
         <span
-          className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
+  className={`self-start shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
             hasAiSentences
               ? "bg-emerald-100 text-emerald-700"
               : "bg-slate-100 text-slate-500"
