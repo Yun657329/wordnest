@@ -6,8 +6,8 @@ import {
   deleteBookFromCloud,
   getBooks,
   getBooksFromCloud,
-  saveBookToCloud,
   saveBooks,
+  saveBooksToCloud,
 } from "@/lib/bookService";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -46,6 +46,7 @@ interface Book {
   id: string;
   name: string;
   words: Word[];
+  order: number;
 }
 function SortableBook({
   book,
@@ -156,34 +157,61 @@ setIsLoggedIn(true);
     id: crypto.randomUUID(),
     name: name.trim(),
     words: [],
+    order: 0,
   };
 
-  setBooks([newBook, ...books]);
+  const updatedBooks = [newBook, ...books].map(
+    (book, index) => ({
+      ...book,
+      order: index,
+    })
+  );
 
-  await saveBookToCloud(newBook);
+  setBooks(updatedBooks);
+
+  saveBooks(updatedBooks);
+
+  try {
+    await saveBooksToCloud(updatedBooks);
+  } catch (error) {
+    console.error("新增教材同步失敗：", error);
+  }
 
   setName("");
 }
-function handleDragEnd(event: DragEndEvent) {
+async function handleDragEnd(event: DragEndEvent) {
   const { active, over } = event;
 
   if (!over || active.id === over.id) return;
 
-  setBooks((currentBooks) => {
-    const oldIndex = currentBooks.findIndex(
-      (book) => book.id === active.id
-    );
+  const oldIndex = books.findIndex(
+    (book) => book.id === active.id
+  );
 
-    const newIndex = currentBooks.findIndex(
-      (book) => book.id === over.id
-    );
+  const newIndex = books.findIndex(
+    (book) => book.id === over.id
+  );
 
-    return arrayMove(
-      currentBooks,
-      oldIndex,
-      newIndex
-    );
-  });
+  if (oldIndex === -1 || newIndex === -1) return;
+
+  const reorderedBooks = arrayMove(
+  books,
+  oldIndex,
+  newIndex
+).map((book, index) => ({
+  ...book,
+  order: index,
+}));
+
+  setBooks(reorderedBooks);
+
+  saveBooks(reorderedBooks);
+
+  try {
+    await saveBooksToCloud(reorderedBooks);
+  } catch (error) {
+    console.error("教材順序同步失敗：", error);
+  }
 }
   async function deleteBook(id: string) {
   const updatedBooks = books.filter(

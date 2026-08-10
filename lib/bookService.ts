@@ -81,7 +81,9 @@ export async function uploadLocalBooksToCloud<
 
   return books.length;
 }
-export async function getBooksFromCloud<T>(): Promise<T[]> {
+export async function getBooksFromCloud<
+  T extends { order?: number }
+>(): Promise<T[]> {
   const user = auth.currentUser;
 
   if (!user) {
@@ -92,7 +94,15 @@ export async function getBooksFromCloud<T>(): Promise<T[]> {
     collection(db, "users", user.uid, "books")
   );
 
-  return snapshot.docs.map((doc) => doc.data() as T);
+  const books = snapshot.docs.map(
+    (doc) => doc.data() as T
+  );
+
+  return books.sort(
+    (a, b) =>
+      (a.order ?? 9999) -
+      (b.order ?? 9999)
+  );
 }
 export async function saveBookToCloud<T extends { id: string }>(
   book: T
@@ -120,4 +130,22 @@ export async function deleteBookFromCloud(bookId: string) {
   const bookRef = doc(db, "users", user.uid, "books", bookId);
 
   await deleteDoc(bookRef);
+}
+export async function saveBooksToCloud<
+  T extends { id: string }
+>(books: T[]) {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error("請先登入 Google");
+  }
+
+  for (const book of books) {
+    const bookRef = doc(
+      collection(db, "users", user.uid, "books"),
+      book.id
+    );
+
+    await setDoc(bookRef, book);
+  }
 }
