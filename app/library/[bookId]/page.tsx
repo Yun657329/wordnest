@@ -1,5 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import {
+  cloneElement,
+  useEffect,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { generateSentences } from "@/lib/ai";
 import WordCard from "@/components/WordCard";
 import OcrImporter from "@/components/OcrImporter";
@@ -9,6 +15,24 @@ import {
   saveBook,
   saveBookToCloud,
 } from "@/lib/bookService";
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+
+import { CSS } from "@dnd-kit/utilities";
 interface WordType {
   partOfSpeech: string;
   meanings: string[];
@@ -35,6 +59,50 @@ interface Book {
   name: string;
   words: Word[];
   lastOpenedAt?: number;
+}
+function SortableWord({
+  word,
+  children,
+}: {
+  word: Word;
+  children: ReactElement<{
+  dragHandle?: ReactNode;
+}>;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: word.id,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+
+  return (
+  <div ref={setNodeRef} style={style}>
+    {cloneElement(children, {
+      dragHandle: (
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="shrink-0 cursor-grab touch-none text-slate-400 leading-none active:cursor-grabbing"
+          title="拖曳排序"
+        >
+          ⋮⋮
+        </button>
+      ),
+    })}
+  </div>
+);
 }
 export default function BookPage() {
   const [book, setBook] = useState<Book | null>(null);
@@ -63,7 +131,19 @@ const [total, setTotal] = useState(0);
     },
   ]);
 
-
+const wordSensors = useSensors(
+  useSensor(PointerSensor, {
+    activationConstraint: {
+      distance: 8,
+    },
+  }),
+  useSensor(TouchSensor, {
+    activationConstraint: {
+      delay: 200,
+      tolerance: 5,
+    },
+  })
+);
  useEffect(() => {
   const id = window.location.pathname.split("/").pop();
 
@@ -154,6 +234,44 @@ async function toggleFavorite(wordId: string) {
   setBook(updatedBook);
 
   await saveBookToCloud(updatedBook);
+}
+async function handleWordDragEnd(event: DragEndEvent) {
+  if (!book) return;
+
+  const { active, over } = event;
+
+  if (!over || active.id === over.id) return;
+
+  const oldIndex = book.words.findIndex(
+    (word) => word.id === active.id
+  );
+
+  const newIndex = book.words.findIndex(
+    (word) => word.id === over.id
+  );
+
+  if (oldIndex === -1 || newIndex === -1) return;
+
+  const reorderedWords = arrayMove(
+    book.words,
+    oldIndex,
+    newIndex
+  );
+
+  const updatedBook: Book = {
+    ...book,
+    words: reorderedWords,
+  };
+
+  setBook(updatedBook);
+
+  saveBook(updatedBook);
+
+  try {
+    await saveBookToCloud(updatedBook);
+  } catch (error) {
+    console.error("單字順序同步失敗：", error);
+  }
 }
 async function deleteWord(wordId: string) {
   if (!book) return;
@@ -559,35 +677,14 @@ alert("✅ 已清空全部 AI 題庫");
 >
   🗑 清空全部 AI 題庫
 </button>
-
-        <div className="mb-6 space-y-4">
-          {book.words.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center">
-              <p className="text-slate-500">
-                這本教材目前還沒有單字
-              </p>
-            </div>
-          ) : (
-            book.words.map((word) => (
-              <WordCard
-  key={word.id}
-  word={word}
-  onToggleFavorite={toggleFavorite}
-  onEdit={editWord}
-  onDelete={deleteWord}
-  onGenerateAI={generateAiForWord}
-  isGenerating={isGeneratingOne}
-  generatingWord={generatingWord}
-
-  isEditing={editingWordId === word.id}
-  setEditingWordId={setEditingWordId}
-  saveInlineWord={saveInlineWord}
-/>
-            ))
-          )}
-        </div>
-
-
+<button
+          onClick={() =>
+            setShowForm(!showForm)
+          }
+          className="w-full rounded-2xl bg-blue-600 py-4 font-semibold text-white"
+        >
+          ＋ 新增單字
+        </button>
         {showForm && (
           <div className="mb-6 space-y-3">
 
@@ -666,16 +763,54 @@ alert("✅ 已清空全部 AI 題庫");
 
           </div>
         )}
-
-
-        <button
-          onClick={() =>
-            setShowForm(!showForm)
-          }
-          className="w-full rounded-2xl bg-blue-600 py-4 font-semibold text-white"
+        <div className="mb-6 space-y-4">
+          {book.words.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center">
+              <p className="text-slate-500">
+                這本教材目前還沒有單字
+              </p>
+            </div>
+          ) : (
+            <DndContext
+  sensors={wordSensors}
+  collisionDetection={closestCenter}
+  onDragEnd={handleWordDragEnd}
+>
+  <SortableContext
+    items={book.words.map((word) => word.id)}
+    strategy={verticalListSortingStrategy}
+  >
+    <div className="space-y-4">
+      {book.words.map((word) => (
+        <SortableWord
+          key={word.id}
+          word={word}
         >
-          ＋ 新增單字
-        </button>
+          <WordCard
+            word={word}
+            onToggleFavorite={toggleFavorite}
+            onEdit={editWord}
+            onDelete={deleteWord}
+            onGenerateAI={generateAiForWord}
+            isGenerating={isGeneratingOne}
+            generatingWord={generatingWord}
+            isEditing={editingWordId === word.id}
+            setEditingWordId={setEditingWordId}
+            saveInlineWord={saveInlineWord}
+          />
+        </SortableWord>
+      ))}
+    </div>
+  </SortableContext>
+</DndContext>
+)}
+  
+</div>
+
+        
+
+
+        
 
 
       </div>

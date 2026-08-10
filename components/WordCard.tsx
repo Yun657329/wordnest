@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import {
+  useState,
+  type ReactNode,
+} from "react";
 
 export interface WordType {
   partOfSpeech: string;
@@ -39,6 +42,7 @@ interface WordCardProps {
   isEditing: boolean;
   setEditingWordId: (wordId: string | null) => void;
   saveInlineWord: (updatedWord: Word) => void | Promise<void>;
+  dragHandle?: React.ReactNode;
 }
 
 export default function WordCard({
@@ -51,6 +55,7 @@ export default function WordCard({
   isEditing,
   setEditingWordId,
   saveInlineWord,
+  dragHandle,
 }: WordCardProps) {
   const [editEnglish, setEditEnglish] = useState(word.english);
 
@@ -307,6 +312,7 @@ export default function WordCard({
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 flex-1 items-center gap-2">
+          {dragHandle}
           <button
             type="button"
             onClick={() => onToggleFavorite(word.id)}

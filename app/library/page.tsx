@@ -11,6 +11,24 @@ import {
 } from "@/lib/bookService";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+
+import { CSS } from "@dnd-kit/utilities";
 
 
 
@@ -28,9 +46,52 @@ interface Book {
   id: string;
   name: string;
   words: Word[];
-  lastOpenedAt?: number;
 }
+function SortableBook({
+  book,
+  children,
+}: {
+  book: Book;
+  children: React.ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: book.id,
+  });
 
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="relative"
+    >
+      <button
+  type="button"
+  {...attributes}
+  {...listeners}
+  className="absolute left-3 top-4 z-10 cursor-grab touch-none text-slate-400 active:cursor-grabbing"
+  aria-label={`拖曳 ${book.name}`}
+  title="拖曳排序"
+>
+  ⋮⋮
+</button>
+
+      {children}
+    </div>
+  );
+}
 export default function LibraryPage() {
     const router = useRouter();
   const [books, setBooks] = useState<any[]>([]);
@@ -44,6 +105,19 @@ const [english, setEnglish] = useState("");
 const [partOfSpeech, setPartOfSpeech] = useState("");
 const [meaning, setMeaning] = useState("");
 const [showAddWord, setShowAddWord] = useState(false);
+const sensors = useSensors(
+  useSensor(PointerSensor, {
+    activationConstraint: {
+      distance: 8,
+    },
+  }),
+  useSensor(TouchSensor, {
+    activationConstraint: {
+      delay: 200,
+      tolerance: 5,
+    },
+  })
+);
   useEffect(() => {
   const unsubscribe = onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -84,13 +158,33 @@ setIsLoggedIn(true);
     words: [],
   };
 
-  setBooks([...books, newBook]);
+  setBooks([newBook, ...books]);
 
   await saveBookToCloud(newBook);
 
   setName("");
 }
+function handleDragEnd(event: DragEndEvent) {
+  const { active, over } = event;
 
+  if (!over || active.id === over.id) return;
+
+  setBooks((currentBooks) => {
+    const oldIndex = currentBooks.findIndex(
+      (book) => book.id === active.id
+    );
+
+    const newIndex = currentBooks.findIndex(
+      (book) => book.id === over.id
+    );
+
+    return arrayMove(
+      currentBooks,
+      oldIndex,
+      newIndex
+    );
+  });
+}
   async function deleteBook(id: string) {
   const updatedBooks = books.filter(
     (book) => book.id !== id
@@ -230,18 +324,22 @@ if (updatedBook !== undefined) {
     )}
   </div>
 ) : (
-          <div className="space-y-4">
-            {[...books]
-  .sort(
-    (a, b) =>
-      (b.lastOpenedAt ?? 0) -
-      (a.lastOpenedAt ?? 0)
-  )
-  .map((book) => (
-  <div
-    key={book.id}
-    className="rounded-2xl border p-4"
+          <DndContext
+  sensors={sensors}
+  collisionDetection={closestCenter}
+  onDragEnd={handleDragEnd}
+>
+  <SortableContext
+    items={books.map((book) => book.id)}
+    strategy={verticalListSortingStrategy}
   >
+    <div className="space-y-4">
+      {books.map((book) => (
+        <SortableBook
+          key={book.id}
+          book={book}
+        >
+  <div className="rounded-2xl border p-4">
     {editingBookId === book.id ? (
       <div className="space-y-2">
         <input
@@ -270,7 +368,7 @@ if (updatedBook !== undefined) {
         </div>
       </div>
     ) : (
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 pl-10">
         <h2 className="text-lg font-semibold">
           📚 {book.name}
         </h2>
@@ -303,9 +401,12 @@ if (updatedBook !== undefined) {
     >
       刪除
     </button>
-  </div>
-))}
-          </div>
+    </div>
+          </SortableBook>
+      ))}
+    </div>
+  </SortableContext>
+</DndContext>
         )}
 
       </div>
