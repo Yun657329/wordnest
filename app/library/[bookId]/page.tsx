@@ -12,8 +12,11 @@ import OcrImporter from "@/components/OcrImporter";
 import { auth } from "@/lib/firebase";
 import {
   getBook,
+  getBooks,
   saveBook,
+  saveBooks,
   saveBookToCloud,
+  saveBooksToCloud,
 } from "@/lib/bookService";
 import {
   DndContext,
@@ -118,6 +121,14 @@ const [total, setTotal] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [english, setEnglish] = useState("");
+  const [manageMode, setManageMode] = useState(false);
+
+const [selectedWordIds, setSelectedWordIds] = useState<string[]>([]);
+
+const [showMoveWordDialog, setShowMoveWordDialog] =
+  useState(false);
+
+const [allBooks, setAllBooks] = useState<Book[]>([]);
 
   const [types, setTypes] = useState<
     {
@@ -164,6 +175,9 @@ const wordSensors = useSensors(
   };
 
   setBook(normalizedBook);
+  const books = getBooks<Book>();
+
+setAllBooks(books);
 
 saveBook(normalizedBook);
 
@@ -271,6 +285,56 @@ async function handleWordDragEnd(event: DragEndEvent) {
     await saveBookToCloud(updatedBook);
   } catch (error) {
     console.error("單字順序同步失敗：", error);
+  }
+}
+function toggleWordSelection(wordId: string) {
+  setSelectedWordIds((current) =>
+    current.includes(wordId)
+      ? current.filter((id) => id !== wordId)
+      : [...current, wordId]
+  );
+}
+async function moveSelectedWords(
+  targetBookId: string
+) {
+  if (!book) return;
+
+  const books = getBooks<Book>();
+
+  const sourceBook = books.find(
+    (item) => item.id === book.id
+  );
+
+  const targetBook = books.find(
+    (item) => item.id === targetBookId
+  );
+
+  if (!sourceBook || !targetBook) return;
+
+  const movingWords = sourceBook.words.filter((word) =>
+    selectedWordIds.includes(word.id)
+  );
+
+  sourceBook.words = sourceBook.words.filter(
+    (word) => !selectedWordIds.includes(word.id)
+  );
+
+  targetBook.words.push(...movingWords);
+
+  saveBooks(books);
+
+  setBook(sourceBook);
+
+  setAllBooks(books);
+
+  setSelectedWordIds([]);
+
+  setShowMoveWordDialog(false);
+
+  try {
+    await saveBooksToCloud(books);
+  } catch (error) {
+    console.error("同步失敗", error);
   }
 }
 async function deleteWord(wordId: string) {
@@ -614,13 +678,30 @@ alert("✅ 已清空全部 AI 題庫");
 >
   ← 回教材列表
 </button>
-        <h1 className="mb-2 text-3xl font-bold">
-          📚 {book.name}
-        </h1>
+        <div className="mb-6 flex items-start justify-between">
+  <div>
+    <h1 className="text-3xl font-bold">
+      📚 {book.name}
+    </h1>
 
-        <p className="mb-6 text-gray-500">
-          目前有 {book.words.length} 個單字
-        </p>
+    <p className="mt-2 text-gray-500">
+      目前有 {book.words.length} 個單字
+    </p>
+  </div>
+
+  <button
+    onClick={() => {
+      if (manageMode) {
+        setSelectedWordIds([]);
+      }
+
+      setManageMode(!manageMode);
+    }}
+    className="rounded-xl bg-slate-200 px-4 py-2"
+  >
+    {manageMode ? "完成" : "管理"}
+  </button>
+</div>
         <OcrImporter
   book={book}
   setBook={setBook}
@@ -763,6 +844,22 @@ alert("✅ 已清空全部 AI 題庫");
 
           </div>
         )}
+        {manageMode && (
+  <div className="mb-4 rounded-xl bg-blue-50 p-4">
+    <p className="text-blue-700">
+      已選取 {selectedWordIds.length} 個單字
+    </p>
+
+    {selectedWordIds.length > 0 && (
+      <button
+        onClick={() => setShowMoveWordDialog(true)}
+        className="mt-3 rounded-xl bg-amber-500 px-4 py-2 text-white"
+      >
+        📚 移動到教材
+      </button>
+    )}
+  </div>
+)}
         <div className="mb-6 space-y-4">
           {book.words.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center">
@@ -786,18 +883,23 @@ alert("✅ 已清空全部 AI 題庫");
           key={word.id}
           word={word}
         >
-          <WordCard
-            word={word}
-            onToggleFavorite={toggleFavorite}
-            onEdit={editWord}
-            onDelete={deleteWord}
-            onGenerateAI={generateAiForWord}
-            isGenerating={isGeneratingOne}
-            generatingWord={generatingWord}
-            isEditing={editingWordId === word.id}
-            setEditingWordId={setEditingWordId}
-            saveInlineWord={saveInlineWord}
-          />
+
+  <WordCard
+  word={word}
+  onToggleFavorite={toggleFavorite}
+  onEdit={editWord}
+  onDelete={deleteWord}
+  onGenerateAI={generateAiForWord}
+  isGenerating={isGeneratingOne}
+  generatingWord={generatingWord}
+  isEditing={editingWordId === word.id}
+  setEditingWordId={setEditingWordId}
+  saveInlineWord={saveInlineWord}
+
+  manageMode={manageMode}
+  selected={selectedWordIds.includes(word.id)}
+  onToggleSelect={() => toggleWordSelection(word.id)}
+/>
         </SortableWord>
       ))}
     </div>
@@ -814,7 +916,50 @@ alert("✅ 已清空全部 AI 題庫");
 
 
       </div>
+{showMoveWordDialog && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div className="flex max-h-[80vh] w-[420px] flex-col rounded-2xl bg-white p-6 shadow-xl">
 
+      <h2 className="mb-4 text-xl font-bold">
+  📚 移動到教材
+</h2>
+
+<div className="flex-1 overflow-y-auto">
+
+  <button
+    onClick={() => {
+      moveSelectedWords(book.id);
+    }}
+    className="mb-2 w-full rounded-xl border p-3 text-left hover:bg-slate-50"
+  >
+    📚 {book.name}
+  </button>
+
+  {allBooks
+    .filter((item) => item.id !== book.id)
+    .map((item) => (
+      <button
+        key={item.id}
+        onClick={() => {
+          moveSelectedWords(item.id);
+        }}
+        className="mb-2 w-full rounded-xl border p-3 text-left hover:bg-slate-50"
+      >
+        📚 {item.name}
+      </button>
+    ))}
+
+</div>
+
+      <button
+        onClick={() => setShowMoveWordDialog(false)}
+        className="mt-4 w-full rounded-xl bg-slate-200 py-2"
+      >
+        取消
+      </button>
+    </div>
+  </div>
+)}
     </main>
   );
 }

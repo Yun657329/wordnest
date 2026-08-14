@@ -47,13 +47,22 @@ interface Book {
   name: string;
   words: Word[];
   order: number;
+
+  folderId?: string;
+}
+interface Folder {
+  id: string;
+  name: string;
+  order: number;
 }
 function SortableBook({
   book,
   children,
+  manageMode,
 }: {
   book: Book;
   children: React.ReactNode;
+  manageMode: boolean;
 }) {
   const {
     attributes,
@@ -78,16 +87,18 @@ function SortableBook({
       style={style}
       className="relative"
     >
-      <button
-  type="button"
-  {...attributes}
-  {...listeners}
-  className="absolute left-3 top-4 z-10 cursor-grab touch-none text-slate-400 active:cursor-grabbing"
-  aria-label={`拖曳 ${book.name}`}
-  title="拖曳排序"
->
-  ⋮⋮
-</button>
+      {!manageMode && (
+  <button
+    type="button"
+    {...attributes}
+    {...listeners}
+    className="absolute left-3 top-4 z-10 cursor-grab touch-none text-slate-400 active:cursor-grabbing"
+    aria-label={`拖曳 ${book.name}`}
+    title="拖曳排序"
+  >
+    ⋮⋮
+  </button>
+)}
 
       {children}
     </div>
@@ -99,6 +110,10 @@ export default function LibraryPage() {
   const [hasLoaded, setHasLoaded] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [name, setName] = useState("");
+  const [search, setSearch] = useState("");
+  const [folders, setFolders] = useState<Folder[]>([]);
+const [folderName, setFolderName] = useState("");
+  const [highlightedBookId, setHighlightedBookId] = useState<string | null>(null);
   const [editingBookId, setEditingBookId] = useState<string | null>(null);
 const [editingBookName, setEditingBookName] = useState("");
   const [selectedBook, setSelectedBook] = useState<any>(null);
@@ -106,6 +121,11 @@ const [english, setEnglish] = useState("");
 const [partOfSpeech, setPartOfSpeech] = useState("");
 const [meaning, setMeaning] = useState("");
 const [showAddWord, setShowAddWord] = useState(false);
+const [selectedFolderId, setSelectedFolderId] =
+  useState<string | null>(null);
+  const [manageMode, setManageMode] = useState(false);
+const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
+const [showMoveDialog, setShowMoveDialog] = useState(false);
 const sensors = useSensors(
   useSensor(PointerSensor, {
     activationConstraint: {
@@ -143,7 +163,23 @@ setIsLoggedIn(true);
 
   return unsubscribe;
 }, []);
+useEffect(() => {
+  const savedFolders = localStorage.getItem("wordnest-folders");
 
+  if (!savedFolders) return;
+
+  try {
+    setFolders(JSON.parse(savedFolders));
+  } catch {
+    setFolders([]);
+  }
+}, []);
+useEffect(() => {
+  localStorage.setItem(
+    "wordnest-folders",
+    JSON.stringify(folders)
+  );
+}, [folders]);
   useEffect(() => {
   if (!hasLoaded) return;
 
@@ -154,11 +190,12 @@ setIsLoggedIn(true);
   if (!name.trim()) return;
 
   const newBook: Book = {
-    id: crypto.randomUUID(),
-    name: name.trim(),
-    words: [],
-    order: 0,
-  };
+  id: crypto.randomUUID(),
+  name: name.trim(),
+  words: [],
+  order: 0,
+  folderId: selectedFolderId ?? undefined,
+};
 
   const updatedBooks = [newBook, ...books].map(
     (book, index) => ({
@@ -178,6 +215,32 @@ setIsLoggedIn(true);
   }
 
   setName("");
+}
+function addFolder() {
+  if (!folderName.trim()) return;
+
+  const newFolder: Folder = {
+    id: crypto.randomUUID(),
+    name: folderName.trim(),
+    order: 0,
+  };
+
+  const updatedFolders = [
+    newFolder,
+    ...folders,
+  ].map((folder, index) => ({
+    ...folder,
+    order: index,
+  }));
+
+  setFolders(updatedFolders);
+
+localStorage.setItem(
+  "wordnest-folders",
+  JSON.stringify(updatedFolders)
+);
+
+setFolderName("");
 }
 async function handleDragEnd(event: DragEndEvent) {
   const { active, over } = event;
@@ -250,6 +313,37 @@ function cancelRenameBook() {
   setEditingBookId(null);
   setEditingBookName("");
 }
+async function moveSelectedBooks(folderId?: string) {
+  const updatedBooks = books.map((book) => {
+    if (!selectedBookIds.includes(book.id)) {
+      return book;
+    }
+
+    return {
+      ...book,
+      folderId,
+    };
+  });
+
+  setBooks(updatedBooks);
+
+  saveBooks(updatedBooks);
+
+  try {
+    await saveBooksToCloud(updatedBooks);
+  } catch (error) {
+    console.error(error);
+  }
+
+  localStorage.setItem(
+    "wordnest-books",
+    JSON.stringify(updatedBooks)
+  );
+
+  setSelectedBookIds([]);
+  setManageMode(false);
+  setShowMoveDialog(false);
+}
 function addWord() {
   if (!selectedBook) return;
 
@@ -299,10 +393,31 @@ if (updatedBook !== undefined) {
   ← 回首頁
 </button>
 
-<h1 className="mb-6 text-3xl font-bold">
-  📖 我的教材
-</h1>
+<div className="mb-4 flex items-center justify-between">
+  <h1 className="text-3xl font-bold">
+    📚 我的教材
+  </h1>
 
+  <button
+    onClick={() => {
+      if (manageMode) {
+        setSelectedBookIds([]);
+      }
+      setManageMode(!manageMode);
+    }}
+    className="rounded-xl bg-slate-100 px-4 py-2"
+  >
+    {manageMode ? "取消" : "管理"}
+  </button>
+</div>
+{selectedFolderId && (
+  <button
+    onClick={() => setSelectedFolderId(null)}
+    className="mb-4 rounded-lg bg-slate-100 px-4 py-2"
+  >
+    ← 返回全部教材
+  </button>
+)}
         <div className="mb-6 flex gap-2">
           <input
             className="flex-1 rounded-xl border px-4 py-3"
@@ -320,7 +435,82 @@ if (updatedBook !== undefined) {
             新增
           </button>
         </div>
+        <div className="mb-6 flex gap-2">
+  <input
+    className="flex-1 rounded-xl border px-4 py-3"
+    placeholder="例如：字根字首"
+    value={folderName}
+    onChange={(e) => setFolderName(e.target.value)}
+    onKeyDown={(e) => {
+      if (e.key === "Enter") {
+        addFolder();
+      }
+    }}
+  />
 
+  <button
+    onClick={addFolder}
+    className="rounded-xl bg-amber-500 px-5 text-white"
+  >
+    新增資料夾
+  </button>
+</div>
+        <div className="mb-6">
+  <input
+    type="text"
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    placeholder="🔍 搜尋教材..."
+    className="w-full rounded-xl border px-4 py-3"
+  />
+</div>
+
+{manageMode && (
+  <div className="mb-4 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-700">
+    已選取 {selectedBookIds.length} 本教材
+  </div>
+)}
+{manageMode && selectedBookIds.length > 0 && (
+  <div className="mb-6 flex gap-3">
+    <button
+      onClick={() => setShowMoveDialog(true)}
+      className="rounded-xl bg-amber-500 px-5 py-2 text-white"
+    >
+      📁 移入資料夾
+    </button>
+  </div>
+)}
+
+{folders.length > 0 && (
+  <div className="mb-6 space-y-3">
+    {folders.map((folder) => (
+  <div
+  key={folder.id}
+  onClick={() => {
+    setSelectedFolderId(folder.id);
+    router.push(`/library/folder/${folder.id}`);
+  }}
+  className="cursor-pointer rounded-2xl border border-amber-200 bg-amber-50 p-4 hover:bg-amber-100"
+>
+        <div className="flex items-center gap-2">
+          <span className="text-xl">📁</span>
+
+          <h2 className="font-semibold">
+            {folder.name}
+          </h2>
+        </div>
+
+        <p className="mt-1 text-sm text-slate-500">
+  {
+    books.filter(
+      (book) => book.folderId === folder.id
+    ).length
+  } 本教材
+</p>
+      </div>
+    ))}
+  </div>
+)}
 {selectedBook && (
   <div className="mb-6 rounded-2xl bg-blue-50 p-5">
     <h2 className="text-xl font-bold">
@@ -352,6 +542,7 @@ if (updatedBook !== undefined) {
     )}
   </div>
 ) : (
+  
           <DndContext
   sensors={sensors}
   collisionDetection={closestCenter}
@@ -362,12 +553,23 @@ if (updatedBook !== undefined) {
     strategy={verticalListSortingStrategy}
   >
     <div className="space-y-4">
-      {books.map((book) => (
+      {books
+  .filter((book) => !book.folderId)
+  .map((book) => (
         <SortableBook
-          key={book.id}
-          book={book}
-        >
-  <div className="rounded-2xl border p-4">
+  key={book.id}
+  book={book}
+  manageMode={manageMode}
+>
+  <div
+  id={`book-${book.id}`}
+  className={`rounded-2xl border p-4 transition-all duration-300 ${
+    highlightedBookId === book.id
+      ? "border-yellow-400 bg-yellow-50 ring-2 ring-yellow-200"
+      : ""
+  }`}
+>
+  
     {editingBookId === book.id ? (
       <div className="space-y-2">
         <input
@@ -396,10 +598,36 @@ if (updatedBook !== undefined) {
         </div>
       </div>
     ) : (
-      <div className="flex items-center justify-between gap-3 pl-10">
-        <h2 className="text-lg font-semibold">
-          📚 {book.name}
-        </h2>
+      <div className={`flex items-center justify-between gap-3 ${
+  manageMode ? "pl-3" : "pl-10"
+}`}>
+        <div className="flex items-center gap-2">
+  {manageMode && (
+    <input
+      type="checkbox"
+      checked={selectedBookIds.includes(book.id)}
+      onChange={(e) => {
+        e.stopPropagation();
+
+        if (e.target.checked) {
+          setSelectedBookIds((current) => [
+            ...current,
+            book.id,
+          ]);
+        } else {
+          setSelectedBookIds((current) =>
+            current.filter((id) => id !== book.id)
+          );
+        }
+      }}
+      className="h-5 w-5"
+    />
+  )}
+
+  <h2 className="text-lg font-semibold">
+    📚 {book.name}
+  </h2>
+</div>
 
         <button
           onClick={() => startRenameBook(book)}
@@ -438,6 +666,50 @@ if (updatedBook !== undefined) {
         )}
 
       </div>
+      {showMoveDialog && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div className="w-80 rounded-2xl bg-white p-6">
+
+      <h2 className="mb-4 text-xl font-bold">
+        選擇資料夾
+      </h2>
+
+      <button
+  onClick={() => moveSelectedBooks(undefined)}
+  className="mb-2 w-full rounded-xl border p-3 text-left"
+>
+  📂 第一層
+</button>
+
+      {folders.map((folder) => (
+  <button
+    key={folder.id}
+    onClick={() => moveSelectedBooks(folder.id)}
+    className="mb-2 w-full rounded-xl border p-3 text-left"
+  >
+    📁 {folder.name}
+     <p className="mt-2 text-gray-500">
+  {
+    books.filter(
+      (book) => book.folderId === folder.id
+    ).length
+  }
+  本教材
+</p>
+  </button>
+ 
+))}
+
+      <button
+        onClick={() => setShowMoveDialog(false)}
+        className="mt-4 w-full rounded-xl bg-gray-200 py-2"
+      >
+        取消
+      </button>
+
+    </div>
+  </div>
+)}
     </main>
   );
 }

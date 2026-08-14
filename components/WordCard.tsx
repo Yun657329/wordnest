@@ -43,6 +43,9 @@ interface WordCardProps {
   setEditingWordId: (wordId: string | null) => void;
   saveInlineWord: (updatedWord: Word) => void | Promise<void>;
   dragHandle?: React.ReactNode;
+  manageMode?: boolean;
+selected?: boolean;
+onToggleSelect?: () => void;
 }
 
 export default function WordCard({
@@ -56,6 +59,9 @@ export default function WordCard({
   setEditingWordId,
   saveInlineWord,
   dragHandle,
+  manageMode,
+selected,
+onToggleSelect,
 }: WordCardProps) {
   const [editEnglish, setEditEnglish] = useState(word.english);
 
@@ -312,7 +318,17 @@ export default function WordCard({
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          {dragHandle}
+
+  {manageMode && (
+    <input
+      type="checkbox"
+      checked={selected}
+      onChange={onToggleSelect}
+      className="h-5 w-5"
+    />
+  )}
+
+  {dragHandle}
           <button
             type="button"
             onClick={() => onToggleFavorite(word.id)}

@@ -118,7 +118,15 @@ export async function saveBookToCloud<T extends { id: string }>(
     book.id
   );
 
-  await setDoc(bookRef, book);
+  const bookData = {
+  ...(book as any),
+};
+
+if (bookData.folderId === undefined) {
+  delete bookData.folderId;
+}
+
+await setDoc(bookRef, bookData);
 }
 export async function deleteBookFromCloud(bookId: string) {
   const user = auth.currentUser;
@@ -141,11 +149,19 @@ export async function saveBooksToCloud<
   }
 
   for (const book of books) {
-    const bookRef = doc(
-      collection(db, "users", user.uid, "books"),
-      book.id
-    );
+  const bookRef = doc(
+    collection(db, "users", user.uid, "books"),
+    book.id
+  );
 
-    await setDoc(bookRef, book);
+  const bookData = {
+  ...(book as any),
+};
+
+  if (bookData.folderId === undefined) {
+    delete bookData.folderId;
   }
+
+  await setDoc(bookRef, bookData);
+}
 }
