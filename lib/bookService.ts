@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   setDoc,
 } from "firebase/firestore";
@@ -164,4 +165,64 @@ export async function saveBooksToCloud<
 
   await setDoc(bookRef, bookData);
 }
+}
+export async function saveBooksEverywhere<
+  T extends { id: string }
+>(books: T[]) {
+  saveBooks(books);
+
+  if (auth.currentUser) {
+    await saveBooksToCloud(books);
+  }
+}
+export async function getFoldersFromCloud<T>(): Promise<T[]> {
+  const user = auth.currentUser;
+
+  if (!user) {
+    return [];
+  }
+
+  const folderRef = doc(
+    db,
+    "users",
+    user.uid,
+    "data",
+    "folders"
+  );
+
+  const snapshot = await getDoc(folderRef);
+
+  if (!snapshot.exists()) {
+    return [];
+  }
+
+  const data = snapshot.data();
+
+  if (!Array.isArray(data.items)) {
+    return [];
+  }
+
+  return data.items as T[];
+}
+
+export async function saveFoldersToCloud<T>(
+  folders: T[]
+) {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error("請先登入 Google");
+  }
+
+  const folderRef = doc(
+    db,
+    "users",
+    user.uid,
+    "data",
+    "folders"
+  );
+
+  await setDoc(folderRef, {
+    items: folders,
+  });
 }

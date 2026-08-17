@@ -277,15 +277,13 @@ async function moveSelectedBooks(targetFolderId?: string) {
     book={book}
   >
     {manageMode && (
-      <div className="mb-3">
-        <input
-          type="checkbox"
-          checked={selectedBookIds.includes(book.id)}
-          onChange={() => toggleBookSelection(book.id)}
-          className="h-5 w-5"
-        />
-      </div>
-    )}
+  <input
+    type="checkbox"
+    checked={selectedBookIds.includes(book.id)}
+    onChange={() => toggleBookSelection(book.id)}
+    className="h-5 w-5 shrink-0"
+  />
+)}
   </BookCard>
 ))}
           </div>

@@ -8,6 +8,8 @@ import {
   getBooksFromCloud,
   saveBooks,
   saveBooksToCloud,
+  getFoldersFromCloud,
+saveFoldersToCloud,
 } from "@/lib/bookService";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -112,6 +114,7 @@ export default function LibraryPage() {
   const [name, setName] = useState("");
   const [search, setSearch] = useState("");
   const [folders, setFolders] = useState<Folder[]>([]);
+  const [foldersLoaded, setFoldersLoaded] = useState(false);
 const [folderName, setFolderName] = useState("");
   const [highlightedBookId, setHighlightedBookId] = useState<string | null>(null);
   const [editingBookId, setEditingBookId] = useState<string | null>(null);
@@ -140,46 +143,109 @@ const sensors = useSensors(
   })
 );
   useEffect(() => {
-  const unsubscribe = onAuthStateChanged(auth, async (user) => {
-    if (!user) {
-  setIsLoggedIn(false);
-  setBooks([]);
-  setHasLoaded(true);
-  return;
-}
+  const unsubscribe = onAuthStateChanged(
+    auth,
+    async (user) => {
+      if (!user) {
+        setIsLoggedIn(false);
+        setBooks([]);
 
-setIsLoggedIn(true);
+        const localFolderText =
+          localStorage.getItem("wordnest-folders");
 
-    const cloudBooks = await getBooksFromCloud<Book>();
+        if (localFolderText) {
+          try {
+            setFolders(JSON.parse(localFolderText));
+          } catch {
+            setFolders([]);
+          }
+        } else {
+          setFolders([]);
+        }
 
-    if (cloudBooks.length > 0) {
-      setBooks(cloudBooks);
-    } else {
-      setBooks(getBooks<Book>());
+        setFoldersLoaded(true);
+        setHasLoaded(true);
+        return;
+      }
+
+      setIsLoggedIn(true);
+
+      // 讀取教材
+      const cloudBooks =
+        await getBooksFromCloud<Book>();
+
+      if (cloudBooks.length > 0) {
+        setBooks(cloudBooks);
+      } else {
+        setBooks(getBooks<Book>());
+      }
+
+      // 讀取這台裝置原本的資料夾
+      const localFolderText =
+        localStorage.getItem("wordnest-folders");
+
+      let localFolders: Folder[] = [];
+
+      if (localFolderText) {
+        try {
+          localFolders =
+            JSON.parse(localFolderText);
+        } catch {
+          localFolders = [];
+        }
+      }
+
+      // 讀取 Firebase 資料夾
+      const cloudFolders =
+        await getFoldersFromCloud<Folder>();
+
+      if (cloudFolders.length > 0) {
+        // Firebase 已有資料，以 Firebase 為準
+        setFolders(cloudFolders);
+
+        localStorage.setItem(
+          "wordnest-folders",
+          JSON.stringify(cloudFolders)
+        );
+      } else if (localFolders.length > 0) {
+        // Firebase 還沒有資料，
+        // 第一次把這台裝置現有資料夾上傳
+        setFolders(localFolders);
+
+        await saveFoldersToCloud(
+          localFolders
+        );
+      } else {
+        setFolders([]);
+      }
+
+      setFoldersLoaded(true);
+      setHasLoaded(true);
     }
-
-    setHasLoaded(true);
-  });
+  );
 
   return unsubscribe;
 }, []);
-useEffect(() => {
-  const savedFolders = localStorage.getItem("wordnest-folders");
 
-  if (!savedFolders) return;
-
-  try {
-    setFolders(JSON.parse(savedFolders));
-  } catch {
-    setFolders([]);
-  }
-}, []);
 useEffect(() => {
+  if (!foldersLoaded) return;
+
   localStorage.setItem(
     "wordnest-folders",
     JSON.stringify(folders)
   );
-}, [folders]);
+
+  if (auth.currentUser) {
+    saveFoldersToCloud(folders).catch(
+      (error) => {
+        console.error(
+          "資料夾同步失敗：",
+          error
+        );
+      }
+    );
+  }
+}, [folders, foldersLoaded]);
   useEffect(() => {
   if (!hasLoaded) return;
 
@@ -235,12 +301,23 @@ function addFolder() {
 
   setFolders(updatedFolders);
 
-localStorage.setItem(
-  "wordnest-folders",
-  JSON.stringify(updatedFolders)
-);
-
 setFolderName("");
+}
+function deleteFolder(folderId: string) {
+  const hasBooks = books.some(
+    (book) => book.folderId === folderId
+  );
+
+  if (hasBooks) {
+    alert("請先將資料夾內的教材移出，再刪除資料夾。");
+    return;
+  }
+
+  const updatedFolders = folders.filter(
+    (folder) => folder.id !== folderId
+  );
+
+  setFolders(updatedFolders);
 }
 async function handleDragEnd(event: DragEndEvent) {
   const { active, over } = event;
@@ -492,13 +569,27 @@ if (updatedBook !== undefined) {
   }}
   className="cursor-pointer rounded-2xl border border-amber-200 bg-amber-50 p-4 hover:bg-amber-100"
 >
-        <div className="flex items-center gap-2">
-          <span className="text-xl">📁</span>
+        <div className="flex items-center justify-between">
 
-          <h2 className="font-semibold">
-            {folder.name}
-          </h2>
-        </div>
+  <div className="flex items-center gap-2">
+    <span className="text-xl">📁</span>
+
+    <h2 className="font-semibold">
+      {folder.name}
+    </h2>
+  </div>
+
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      deleteFolder(folder.id);
+    }}
+    className="text-red-500 hover:text-red-700"
+  >
+    刪除
+  </button>
+
+</div>
 
         <p className="mt-1 text-sm text-slate-500">
   {
