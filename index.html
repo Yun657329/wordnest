@@ -14,190 +14,68 @@
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
     <style>
-        * { box-sizing: border-box; }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f4f6f8;
-            margin: 0;
-            padding: 15px;
-            color: #2c3e50;
-            overflow-x: hidden;
+        /* 📱 全局強制防溢出與縮放規則 */
+        * {
+            box-sizing: border-box !important;
         }
+        
+        html, body {
+            width: 100% !important;
+            max-width: 100vw !important;
+            overflow-x: hidden !important;
+            margin: 0 !important;
+            padding: 10px !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f4f6f8;
+            color: #2c3e50;
+        }
+
         .container {
-            max-width: 600px;
-            margin: 0 auto;
+            width: 100% !important;
+            max-width: 500px !important;
+            margin: 0 auto !important;
             background: white;
             border-radius: 16px;
-            padding: 24px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
-        }
-        .app-header {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .app-header h1 {
-            font-size: 1.8rem;
-            color: #2563eb;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        .app-header p {
-            font-size: 0.9rem;
-            color: #64748b;
-            margin: 6px 0 0 0;
+            padding: 16px !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
         }
 
-        /* 頁籤導覽列 */
-        .tab-menu {
-            display: flex;
-            background-color: #f1f5f9;
-            border-radius: 10px;
-            padding: 4px;
-            margin-bottom: 20px;
-        }
-        .tab-btn {
-            flex: 1;
-            padding: 10px;
-            background: none;
-            border: none;
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: #64748b;
-            cursor: pointer;
-            border-radius: 8px;
-            transition: all 0.2s ease;
-        }
-        .tab-btn.active {
-            background-color: #ffffff;
-            color: #2563eb;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+        /* 1. 強制所有 Flex 橫排容器在手機上可自動換行，絕不出界 */
+        div[style*="display: flex"], 
+        div[style*="display:flex"] {
+            flex-wrap: wrap !important;
+            max-width: 100% !important;
         }
 
-        /* 分頁頁面顯示控制 */
+        /* 2. 修復 API Key 輸入框列 (讓 input 單獨一行，按鈕並排) */
+        #groqApiKey {
+            flex: 1 1 100% !important;
+            width: 100% !important;
+            margin-bottom: 6px;
+        }
+
+        /* 3. 修復「新增單字」中文解釋輸入列 (防止紅色 × 按鈕被擠出右框) */
+        div[style*="display: flex"] > input[type="text"],
+        div[style*="display:flex"] > input[type="text"] {
+            flex: 1 1 0% !important;
+            min-width: 0 !important; /* 關鍵：允許文字框自由收縮 */
+            width: 0 !important;
+        }
+
+        /* 4. 所有輸入框、下拉選單與按鈕防爆 */
+        input, select, button {
+            max-width: 100% !important;
+            font-size: 0.95rem !important;
+        }
+
+        /* 5. 頁籤與按鈕樣式保持 */
+        .app-header { text-align: center; margin-bottom: 16px; }
+        .app-header h1 { font-size: 1.6rem; color: #2563eb; margin: 0; }
+        .tab-menu { display: flex; background: #f1f5f9; border-radius: 10px; padding: 4px; margin-bottom: 16px; }
+        .tab-btn { flex: 1; padding: 10px; background: none; border: none; font-weight: 600; color: #64748b; cursor: pointer; border-radius: 8px; }
+        .tab-btn.active { background: #ffffff; color: #2563eb; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-
-        /* 表單與輸入區域 */
-        .section-title {
-            font-size: 1.1rem;
-            margin: 0 0 12px 0;
-            color: #1e293b;
-        }
-        .input-group {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-        input, select, button {
-            padding: 12px 14px;
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            font-size: 1rem;
-            outline: none;
-        }
-        input:focus, select:focus {
-            border-color: #2563eb;
-        }
-        button.primary-btn {
-            background-color: #2563eb;
-            color: white;
-            border: none;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        button.primary-btn:hover { background-color: #1d4ed8; }
-
-        /* 單字清單預留區 */
-        .word-list-container {
-            background: #f8fafc;
-            border: 1px dashed #cbd5e1;
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
-            color: #94a3b8;
-        }
-        /* 單字列表與卡片樣式 */
-        .word-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 14px 16px;
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-        }
-        .word-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        .word-title {
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: #1e293b;
-        }
-        .word-pos {
-            font-size: 0.85rem;
-            color: #2563eb;
-            background-color: #eff6ff;
-            padding: 2px 8px;
-            border-radius: 6px;
-            font-weight: 600;
-        }
-        .word-meaning {
-            font-size: 0.95rem;
-            color: #475569;
-        }
-        .del-btn {
-            background-color: #fee2e2;
-            color: #ef4444;
-            border: none;
-            padding: 6px 10px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            font-weight: 600;
-            transition: background 0.2s;
-        }
-        .del-btn:hover {
-            background-color: #fca5a5;
-        }
-
-        /* 📱 手機螢幕窄版自動換行防爆修復 */
-        @media (max-width: 640px) {
-            .container {
-                padding: 16px;
-            }
-            .api-key-container {
-                flex-wrap: wrap !important;
-            }
-            .api-key-container input {
-                flex: 1 1 100% !important;
-            }
-            .api-key-container button {
-                flex: 1 1 calc(50% - 6px) !important;
-                padding: 8px 6px !important;
-                font-size: 0.85rem !important;
-            }
-            .def-input-row {
-                display: flex !important;
-                width: 100% !important;
-                gap: 6px !important;
-            }
-            .def-input-row input {
-                min-width: 0 !important;
-                flex: 1 !important;
-            }
-        }
     </style>
 </head>
 <body>
