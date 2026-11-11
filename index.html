@@ -2,19 +2,27 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>WordNest - 隨身單字巢</title>
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <!-- 📱 iPhone PWA 全螢幕 App 設定 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="WordNest">
+    <link rel="apple-touch-icon" href="icon.png">
+
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
     <style>
         * { box-sizing: border-box; }
+        
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #f4f6f8;
             margin: 0;
             padding: 15px;
             color: #2c3e50;
+            overflow-x: hidden;
         }
         .container {
             max-width: 600px;
@@ -115,63 +123,82 @@
             color: #94a3b8;
         }
         /* 單字列表與卡片樣式 */
-.word-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 14px 16px;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    margin-bottom: 10px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-}
-.word-info {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-.word-title {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: #1e293b;
-}
-.word-pos {
-    font-size: 0.85rem;
-    color: #2563eb;
-    background-color: #eff6ff;
-    padding: 2px 8px;
-    border-radius: 6px;
-    font-weight: 600;
-}
-.word-meaning {
-    font-size: 0.95rem;
-    color: #475569;
-}
-.del-btn {
-    background-color: #fee2e2;
-    color: #ef4444;
-    border: none;
-    padding: 6px 10px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.85rem;
-    font-weight: 600;
-    transition: background 0.2s;
-}
-.del-btn:hover {
-    background-color: #fca5a5;
-}
+        .word-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+        .word-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .word-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        .word-pos {
+            font-size: 0.85rem;
+            color: #2563eb;
+            background-color: #eff6ff;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+        .word-meaning {
+            font-size: 0.95rem;
+            color: #475569;
+        }
+        .del-btn {
+            background-color: #fee2e2;
+            color: #ef4444;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        .del-btn:hover {
+            background-color: #fca5a5;
+        }
+
+        /* 📱 手機螢幕窄版自動換行防爆修復 */
+        @media (max-width: 640px) {
+            .container {
+                padding: 16px;
+            }
+            .api-key-container {
+                flex-wrap: wrap !important;
+            }
+            .api-key-container input {
+                flex: 1 1 100% !important;
+            }
+            .api-key-container button {
+                flex: 1 1 calc(50% - 6px) !important;
+                padding: 8px 6px !important;
+                font-size: 0.85rem !important;
+            }
+            .def-input-row {
+                display: flex !important;
+                width: 100% !important;
+                gap: 6px !important;
+            }
+            .def-input-row input {
+                min-width: 0 !important;
+                flex: 1 !important;
+            }
+        }
     </style>
-
-<!-- iPhone 全螢幕全頁面體驗 -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="WordNest">
-
-<!-- App 桌面圖示（若有圖片可放同目錄下的 icon.png） -->
-<link rel="apple-touch-icon" href="icon.png">
 </head>
 <body>
 
