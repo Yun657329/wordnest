@@ -1,0 +1,1752 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WordNest - 隨身單字巢</title>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f6f8;
+            margin: 0;
+            padding: 15px;
+            color: #2c3e50;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+        }
+        .app-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .app-header h1 {
+            font-size: 1.8rem;
+            color: #2563eb;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .app-header p {
+            font-size: 0.9rem;
+            color: #64748b;
+            margin: 6px 0 0 0;
+        }
+
+        /* 頁籤導覽列 */
+        .tab-menu {
+            display: flex;
+            background-color: #f1f5f9;
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            background: none;
+            border: none;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #64748b;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+        .tab-btn.active {
+            background-color: #ffffff;
+            color: #2563eb;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        /* 分頁頁面顯示控制 */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* 表單與輸入區域 */
+        .section-title {
+            font-size: 1.1rem;
+            margin: 0 0 12px 0;
+            color: #1e293b;
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        input, select, button {
+            padding: 12px 14px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 1rem;
+            outline: none;
+        }
+        input:focus, select:focus {
+            border-color: #2563eb;
+        }
+        button.primary-btn {
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button.primary-btn:hover { background-color: #1d4ed8; }
+
+        /* 單字清單預留區 */
+        .word-list-container {
+            background: #f8fafc;
+            border: 1px dashed #cbd5e1;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            color: #94a3b8;
+        }
+        /* 單字列表與卡片樣式 */
+.word-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+.word-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.word-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+.word-pos {
+    font-size: 0.85rem;
+    color: #2563eb;
+    background-color: #eff6ff;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-weight: 600;
+}
+.word-meaning {
+    font-size: 0.95rem;
+    color: #475569;
+}
+.del-btn {
+    background-color: #fee2e2;
+    color: #ef4444;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+.del-btn:hover {
+    background-color: #fca5a5;
+}
+    </style>
+
+<!-- iPhone 全螢幕全頁面體驗 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="WordNest">
+
+<!-- App 桌面圖示（若有圖片可放同目錄下的 icon.png） -->
+<link rel="apple-touch-icon" href="icon.png">
+</head>
+<body>
+
+<div class="container">
+    <header class="app-header">
+        <h1>🪹 WordNest</h1>
+        <p>高中自主學習專案 · 智慧單字庫</p>
+    </header>
+
+    <!-- 頁籤切換按鈕 -->
+    <nav class="tab-menu">
+        <button class="tab-btn active" onclick="switchTab('library', event)">📚 單字庫</button>
+        <button class="tab-btn" onclick="switchTab('quiz', event)">🎯 測驗區</button>
+    </nav>
+
+    <!-- 分頁 1：單字庫管理 -->
+    <section id="library" class="tab-content active">
+        <!-- 功能 1：兩層式檔案結構 (資料夾 ➔ 教材) -->
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 14px; margin-bottom: 20px;">
+            <!-- 1. 資料夾區塊 -->
+<div style="margin-bottom: 14px;">
+    <!-- 上排：下拉選單（佔滿寬度） -->
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <label for="folderSelect" style="font-weight: 700; color: #1e3a8a; font-size: 0.95rem; white-space: nowrap;">📁 資料夾：</label>
+        <select id="folderSelect" onchange="onFolderChange()" style="flex: 1; padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1;"></select>
+    </div>
+    <!-- 下排：三個按鈕一整排 -->
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button type="button" onclick="createNewFolder()" style="background: #3b82f6; color: white; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; cursor: pointer;">＋ 新增資料夾</button>
+        <button type="button" onclick="editFolder()" style="padding: 6px 10px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer;">✏️ 修改名稱</button>
+        <button type="button" onclick="deleteFolder()" style="padding: 6px 10px; background: #fee2e2; color: #ef4444; border: 1px solid #fca5a5; border-radius: 6px; cursor: pointer;">🗑️ 刪除資料夾</button>
+    </div>
+</div>
+
+<!-- 2. 教材區塊 -->
+<div>
+    <!-- 上排：下拉選單（佔滿寬度） -->
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <label for="deckSelect" style="font-weight: 700; color: #1e3a8a; font-size: 0.95rem; white-space: nowrap;">📘 教材：</label>
+        <select id="deckSelect" onchange="onDeckChange()" style="flex: 1; padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1;"></select>
+    </div>
+    <!-- 下排：三個按鈕一整排 -->
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button type="button" onclick="createNewDeck()" style="background: #2563eb; color: white; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; cursor: pointer;">＋ 新增教材</button>
+        <!-- 在教材區塊的按鈕群裡面加入這個按鈕： -->
+<button type="button" onclick="moveDeck()" style="padding: 6px 10px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer;">🚚 移動教材</button>
+        <button type="button" onclick="editDeck()" style="padding: 6px 10px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer;">✏️ 修改名稱</button>
+        <button type="button" onclick="deleteDeck()" style="padding: 6px 10px; background: #fee2e2; color: #ef4444; border: 1px solid #fca5a5; border-radius: 6px; cursor: pointer;">🗑️ 刪除教材</button>
+    </div>
+</div>
+        <h2 class="section-title">新增單字</h2>
+        <!-- 功能 2：新增 / 修改單字區 (支援動態多詞性釋義) -->
+        <div style="background: #f8fafc; padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+            <h2 id="formTitle" class="section-title" style="margin-top: 0;">新增單字</h2>
+            
+            <div style="margin-bottom: 10px;">
+                <input type="text" id="inputWord" placeholder="英文單字 (例如: run)" style="width: 100%; font-size: 1rem;" />
+            </div>
+
+            <!-- 動態詞性與解釋區域 -->
+            <label style="font-size: 0.85rem; color: #64748b; font-weight: 600; display: block; margin-bottom: 6px;">詞性與中文解釋：</label>
+            <div id="definitionsContainer">
+                <!-- JS 會在這裡動態插入詞性輸入列 -->
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-top: 12px;">
+                <button type="button" onclick="addDefinitionRow()" style="background: #e2e8f0; color: #334155; border: none; font-weight: 600; cursor: pointer; padding: 8px 12px; border-radius: 6px;">➕ 增加詞性/釋義</button>
+                <button type="button" id="submitWordBtn" class="primary-btn" onclick="saveWord()" style="flex: 1; padding: 10px; font-size: 0.95rem;">➕ 儲存單字至當前教材</button>
+                <button type="button" id="cancelEditBtn" onclick="cancelEdit()" style="display: none; background: #cbd5e1; color: #334155; border: none; padding: 8px 12px; border-radius: 6px; font-weight: 600; cursor: pointer;">取消修改</button>
+            </div>
+        </div>
+
+<!-- 快速工具區 -->
+    <div style="margin-bottom: 20px; display: flex; gap: 8px; flex-wrap: wrap;">
+        <button onclick="loadPresetWords()" style="background: #e0e7ff; color: #3730a3; border: none; padding: 8px 12px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+            📚 載入高中預設單字
+        </button>
+        <button onclick="toggleImportArea('batchArea')" style="background: #f1f5f9; color: #334155; border: none; padding: 8px 12px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+            📝 批次文字匯入
+        </button>
+        <button onclick="toggleImportArea('ocrArea')" style="background: #fef3c7; color: #92400e; border: none; padding: 8px 12px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+            📷 圖片 OCR 掃描
+        </button>
+    </div>
+
+    <!-- 批次匯入面板 (預設隱藏) -->
+    <div id="batchArea" style="display: none; background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+        <h4 style="margin: 0 0 8px 0;">📝 批次貼上單字 (格式: 英文,詞性,中文 每行一個)</h4>
+        <textarea id="batchInput" rows="4" style="width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; font-family: monospace;" placeholder="achieve, v., 達成&#10;challenge, n., 挑戰"></textarea>
+        <button class="primary-btn" onclick="importBatchWords()" style="margin-top: 8px; width: 100%;">匯入這些單字</button>
+    </div>
+
+    <!-- OCR 面板 (預設隱藏) -->
+    <div id="ocrArea" style="display: none; background: #fffbeb; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #fef3c7;">
+        <h4 style="margin: 0 0 8px 0; color: #92400e;">📷 上傳單字卡/課本照片自動掃描</h4>
+        <input type="file" id="ocrFileInput" accept="image/*" style="margin-bottom: 10px;" />
+        <div id="ocrStatus" style="font-size: 0.9rem; color: #b45309; font-weight: 600;"></div>
+    </div>
+
+    <h2 class="section-title">單字列表</h2>
+    <div id="wordList" class="word-list-container">
+        目前單字庫空空如也，點擊上方按鈕開始建立吧！
+    </div>
+    </section>
+
+    <!-- 分頁 2：測驗區 -->
+<section id="quiz" class="tab-content" style="display: none;">
+
+   <!-- ⚙️ Groq API Key 設定區 (免費、極速、不擋 CORS) -->
+<div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; text-align: left;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+        <label for="groqApiKey" style="font-weight: 700; color: #334155; font-size: 0.9rem;">
+            ⚡ Groq API 金鑰：
+        </label>
+        <a href="https://console.groq.com/keys" target="_blank" style="font-size: 0.8rem; color: #2563eb; text-decoration: underline;">
+            免費申請 Groq API Key ➔
+        </a>
+    </div>
+    <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <input type="password" id="groqApiKey" placeholder="請貼上你的 Groq Key (gsk_...)" 
+               style="flex: 1; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;" />
+        <button type="button" onclick="saveApiKey()" style="padding: 8px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem; white-space: nowrap;">
+            儲存 Key
+        </button>
+        <button type="button" onclick="testGroqApiConnection()" style="padding: 8px 12px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem; white-space: nowrap;">
+            🧪 測試連線
+        </button>
+    </div>
+    <div id="apiStatusText" style="font-size: 0.8rem; margin-top: 6px; font-weight: 600;"></div>
+</div>
+<!-- 📚 跨教材多選測驗範圍 -->
+<div style="margin-bottom: 16px; text-align: left; background: white; padding: 12px 16px; border-radius: 10px; border: 1px solid #cbd5e1;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <label style="font-weight: 700; color: #1e3a8a; font-size: 0.95rem;">📚 勾選要測驗的教材（可跨資料夾多選）：</label>
+        <div>
+            <button type="button" onclick="toggleAllQuizDecks(true)" style="font-size: 0.8rem; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-weight: 600;">全選</button>
+            <button type="button" onclick="toggleAllQuizDecks(false)" style="font-size: 0.8rem; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-weight: 600;">取消全選</button>
+        </div>
+    </div>
+    
+    <!-- JS 會在這裡動態渲染資料夾與教材核取方塊 -->
+    <div id="quizDeckChecklist" style="max-height: 160px; overflow-y: auto; padding: 4px 0;"></div>
+</div>
+    <!-- 測驗模式選擇按鈕 -->
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+        <h3 style="margin-top: 0; margin-bottom: 12px; color: #1e293b; font-size: 1.1rem;">🎯 選擇測驗模式</h3>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button onclick="startQuiz('spelling')" style="flex: 1; min-width: 120px; padding: 10px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">1. 中文拼英文</button>
+            <button onclick="startQuiz('choice')" style="flex: 1; min-width: 120px; padding: 10px; background: #10b981; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">2. 英譯中四選一</button>
+            <button onclick="startQuiz('sentence')" style="flex: 1; min-width: 120px; padding: 10px; background: #8b5cf6; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">3. AI 句子填空</button>
+        </div>
+    </div>
+
+    <!-- 測驗卡片呈現區域 -->
+    <div id="quizContainer" style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; text-align: center; min-height: 200px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+        <p style="color: #64748b; font-size: 1.05rem;">請點擊上方按鈕，開始對當前教材進行測驗！</p>
+    </div>
+</section>
+<!-- 測驗範圍選擇 -->
+<div style="margin-bottom: 16px; text-align: left;">
+
+</div>
+</div>
+
+
+
+<script>
+    // ----------------- 0. 全域資料庫初始化 -----------------
+    let folders = JSON.parse(localStorage.getItem('wordnest_folders')) || [
+        { id: 'f_default', name: '預設資料夾' }
+    ];
+    let decks = JSON.parse(localStorage.getItem('wordnest_decks')) || [
+        { id: 'd_default', folderId: 'f_default', name: '預設教材' }
+    ];
+    // 📍 補上原本漏掉的 words 變數！
+    let words = JSON.parse(localStorage.getItem('wordnest_words')) || [];
+
+    let currentFolderId = localStorage.getItem('wordnest_current_folder') || 'f_default';
+    let currentDeckId = localStorage.getItem('wordnest_current_deck') || 'd_default';
+
+    let editingWordId = null;
+
+    // ----------------- 測驗模組狀態變數 -----------------
+    let quizWords = [];
+    let currentQuizIndex = 0;
+    let quizScore = 0;
+    let currentQuizMode = '';
+
+    // 切換分頁（單字庫 vs 測驗區）
+    function switchTab(tabName, event) {
+    document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+
+    document.getElementById(tabName).style.display = 'block';
+    if (event && event.currentTarget) {
+        event.currentTarget.classList.add('active');
+    }
+
+    // 📍 加上這段：切換到測驗區時自動刷新教材多選清單
+    if (tabName === 'quiz') {
+        renderQuizDeckSelector();
+    }
+}
+
+    // 根據選擇的範圍（當前教材 / 當前資料夾 / 全庫）取得測驗單字陣列
+// 渲染多選教材清單 (依照資料夾分類)
+function renderQuizDeckSelector() {
+    const container = document.getElementById('quizDeckChecklist');
+    if (!container) return;
+
+    if (decks.length === 0) {
+        container.innerHTML = `<span style="color: #94a3b8; font-size: 0.9rem;">目前沒有任何教材！</span>`;
+        return;
+    }
+
+    container.innerHTML = folders.map(f => {
+        const folderDecks = decks.filter(d => d.folderId === f.id);
+        if (folderDecks.length === 0) return '';
+
+        const deckItems = folderDecks.map(d => `
+            <label style="display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; margin-bottom: 6px; font-size: 0.9rem; cursor: pointer; color: #334155;">
+                <input type="checkbox" class="quiz-deck-checkbox" value="${d.id}" checked style="cursor: pointer;" />
+                📘 ${d.name}
+            </label>
+        `).join('');
+
+        return `
+            <div style="margin-bottom: 8px;">
+                <div style="font-size: 0.85rem; font-weight: 700; color: #64748b; margin-bottom: 4px;">📁 ${f.name}</div>
+                <div style="padding-left: 8px;">${deckItems}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+// 一鍵「全選」或「取消全選」
+function toggleAllQuizDecks(checked) {
+    document.querySelectorAll('.quiz-deck-checkbox').forEach(cb => cb.checked = checked);
+}
+
+// 根據勾選的教材 ID 收集所有測驗單字
+function getQuizWordsByScope() {
+    const checkedBoxes = document.querySelectorAll('.quiz-deck-checkbox:checked');
+    const selectedDeckIds = Array.from(checkedBoxes).map(cb => cb.value);
+
+    // 篩選出屬性 deckId 包含在被勾選清單中的單字
+    return words.filter(w => selectedDeckIds.includes(w.deckId || 'd_default'));
+}
+
+    // ----------------- 1. 兩層式 (資料夾 ➔ 教材) 選單系統 -----------------
+    function initFolderDeckSystem() {
+        renderFolders();
+        renderDecks();
+    }
+
+    function renderFolders() {
+        const folderSelect = document.getElementById('folderSelect');
+        if (!folderSelect) return;
+        folderSelect.innerHTML = folders.map(f => 
+            `<option value="${f.id}" ${f.id === currentFolderId ? 'selected' : ''}>${f.name}</option>`
+        ).join('');
+    }
+
+    function renderDecks() {
+        const deckSelect = document.getElementById('deckSelect');
+        if (!deckSelect) return;
+
+        const currentDecks = decks.filter(d => d.folderId === currentFolderId);
+
+        if (currentDecks.length === 0) {
+            deckSelect.innerHTML = '<option value="">(無教材，請先新增)</option>';
+            currentDeckId = '';
+        } else {
+            if (!currentDecks.some(d => d.id === currentDeckId)) {
+                currentDeckId = currentDecks[0].id;
+            }
+            deckSelect.innerHTML = currentDecks.map(d => 
+                `<option value="${d.id}" ${d.id === currentDeckId ? 'selected' : ''}>${d.name}</option>`
+            ).join('');
+        }
+        
+        localStorage.setItem('wordnest_current_deck', currentDeckId);
+
+        if (typeof renderWords === 'function') {
+            renderWords();
+        }
+    }
+
+    function onFolderChange() {
+        currentFolderId = document.getElementById('folderSelect').value;
+        localStorage.setItem('wordnest_current_folder', currentFolderId);
+        renderDecks();
+    }
+
+    function onDeckChange() {
+        currentDeckId = document.getElementById('deckSelect').value;
+        localStorage.setItem('wordnest_current_deck', currentDeckId);
+        if (typeof renderWords === 'function') {
+            renderWords();
+        }
+    }
+
+    function createNewFolder() {
+        const folderName = prompt('請輸入新資料夾名稱（例如：高一英文）：');
+        if (!folderName || !folderName.trim()) return;
+
+        const newFolder = {
+            id: 'folder_' + Date.now(),
+            name: folderName.trim()
+        };
+        folders.push(newFolder);
+        currentFolderId = newFolder.id;
+
+        localStorage.setItem('wordnest_folders', JSON.stringify(folders));
+        localStorage.setItem('wordnest_current_folder', currentFolderId);
+
+        renderFolders();
+        renderDecks();
+    }
+
+    function createNewDeck() {
+        if (!currentFolderId) {
+            alert('請先選擇或新增一個資料夾！');
+            return;
+        }
+
+        const deckName = prompt('請輸入新教材名稱（例如：Lesson 1）：');
+        if (!deckName || !deckName.trim()) return;
+
+        const newDeck = {
+            id: 'deck_' + Date.now(),
+            folderId: currentFolderId,
+            name: deckName.trim()
+        };
+        decks.push(newDeck);
+        currentDeckId = newDeck.id;
+
+        localStorage.setItem('wordnest_decks', JSON.stringify(decks));
+        localStorage.setItem('wordnest_current_deck', currentDeckId);
+
+        renderDecks();
+    }
+
+    // ----------------- 資料夾與教材編輯 / 刪除邏輯 -----------------
+
+// 1. 編輯當前資料夾名稱
+function editFolder() {
+    if (!currentFolderId) return alert('請先選擇一個資料夾！');
+    const target = folders.find(f => f.id === currentFolderId);
+    if (!target) return;
+
+    const newName = prompt('修改資料夾名稱：', target.name);
+    if (!newName || !newName.trim()) return;
+
+    target.name = newName.trim();
+    localStorage.setItem('wordnest_folders', JSON.stringify(folders));
+    renderFolders();
+}
+
+// 2. 刪除當前資料夾 (包含底下所有教材與單字)
+function deleteFolder() {
+    if (!currentFolderId) return alert('請先選擇一個資料夾！');
+    if (folders.length <= 1) return alert('至少需保留一個資料夾！');
+
+    const target = folders.find(f => f.id === currentFolderId);
+    if (!confirm(`確定要刪除資料夾「${target.name}」嗎？裡面的教材與單字也會一併刪除喔！`)) return;
+
+    folders = folders.filter(f => f.id !== currentFolderId);
+    const deckIdsToRemove = decks.filter(d => d.folderId === currentFolderId).map(d => d.id);
+    decks = decks.filter(d => d.folderId !== currentFolderId);
+    words = words.filter(w => !deckIdsToRemove.includes(w.deckId));
+
+    currentFolderId = folders[0].id;
+
+    localStorage.setItem('wordnest_folders', JSON.stringify(folders));
+    localStorage.setItem('wordnest_decks', JSON.stringify(decks));
+    localStorage.setItem('wordnest_words', JSON.stringify(words));
+    localStorage.setItem('wordnest_current_folder', currentFolderId);
+
+    renderFolders();
+    renderDecks();
+}
+
+// 3. 編輯當前教材名稱
+function editDeck() {
+    if (!currentDeckId) return alert('請先選擇一個教材！');
+    const target = decks.find(d => d.id === currentDeckId);
+    if (!target) return;
+
+    const newName = prompt('修改教材名稱：', target.name);
+    if (!newName || !newName.trim()) return;
+
+    target.name = newName.trim();
+    localStorage.setItem('wordnest_decks', JSON.stringify(decks));
+    renderDecks();
+}
+
+// 4. 刪除當前教材 (包含底下所有單字)
+function deleteDeck() {
+    if (!currentDeckId) return alert('請先選擇一個教材！');
+    const currentDecks = decks.filter(d => d.folderId === currentFolderId);
+    if (currentDecks.length <= 1) return alert('資料夾內至少需保留一個教材！');
+
+    const target = decks.find(d => d.id === currentDeckId);
+    if (!confirm(`確定要刪除教材「${target.name}」嗎？裡面的單字也會一併刪除喔！`)) return;
+
+    decks = decks.filter(d => d.id !== currentDeckId);
+    words = words.filter(w => w.deckId !== currentDeckId);
+
+    currentDeckId = currentDecks.find(d => d.id !== currentDeckId)?.id || '';
+
+    localStorage.setItem('wordnest_decks', JSON.stringify(decks));
+    localStorage.setItem('wordnest_words', JSON.stringify(words));
+    localStorage.setItem('wordnest_current_deck', currentDeckId);
+
+    renderDecks();
+}
+
+// ----------------- 彈窗式轉移邏輯 -----------------
+
+// 關閉移動彈窗
+function closeMoveModal() {
+    document.getElementById('moveModal').style.display = 'none';
+}
+
+// 1. 移動教材至其他資料夾
+function moveDeck() {
+    if (!currentDeckId) return alert('請先選擇一個教材！');
+    const targetDeck = decks.find(d => d.id === currentDeckId);
+    if (!targetDeck) return;
+
+    const availableFolders = folders.filter(f => f.id !== targetDeck.folderId);
+    if (availableFolders.length === 0) {
+        alert('目前沒有其他可轉移的資料夾！請先建立新的資料夾。');
+        return;
+    }
+
+    const modal = document.getElementById('moveModal');
+    const title = document.getElementById('moveModalTitle');
+    const text = document.getElementById('moveModalText');
+    const select = document.getElementById('moveTargetSelect');
+    const confirmBtn = document.getElementById('confirmMoveBtn');
+
+    title.innerText = '🚚 移動教材';
+    text.innerText = `請選擇要將教材「${targetDeck.name}」移至哪一個資料夾：`;
+    
+    select.innerHTML = availableFolders.map(f => `<option value="${f.id}">📁 ${f.name}</option>`).join('');
+
+    confirmBtn.onclick = () => {
+        const newFolderId = select.value;
+        targetDeck.folderId = newFolderId;
+
+        localStorage.setItem('wordnest_decks', JSON.stringify(decks));
+
+        currentFolderId = newFolderId;
+        localStorage.setItem('wordnest_current_folder', currentFolderId);
+
+        renderFolders();
+        renderDecks();
+        closeMoveModal();
+    };
+
+    modal.style.display = 'flex';
+}
+
+// 2. 移動單字至其他教材
+function moveWord(wordId) {
+    const targetWord = words.find(w => w.id === wordId);
+    if (!targetWord) return;
+
+    const availableDecks = decks.filter(d => d.id !== (targetWord.deckId || 'd_default'));
+    if (availableDecks.length === 0) {
+        alert('目前沒有其他可轉移的教材！請先建立新的教材。');
+        return;
+    }
+
+    const modal = document.getElementById('moveModal');
+    const title = document.getElementById('moveModalTitle');
+    const text = document.getElementById('moveModalText');
+    const select = document.getElementById('moveTargetSelect');
+    const confirmBtn = document.getElementById('confirmMoveBtn');
+
+    title.innerText = '🚚 移動單字卡';
+    text.innerText = `請選擇要將單字「${targetWord.word}」移至哪一個教材：`;
+
+    select.innerHTML = availableDecks.map(d => {
+        const parentFolder = folders.find(f => f.id === d.folderId);
+        const folderName = parentFolder ? parentFolder.name : '未分類';
+        return `<option value="${d.id}">[${folderName}] 📘 ${d.name}</option>`;
+    }).join('');
+
+    confirmBtn.onclick = () => {
+        targetWord.deckId = select.value;
+
+        localStorage.setItem('wordnest_words', JSON.stringify(words));
+        renderWords();
+        closeMoveModal();
+    };
+
+    modal.style.display = 'flex';
+}
+
+    // ----------------- 2. 多詞性與單字 (新增 / 修改 / 刪除) 控制邏輯 -----------------
+    function addDefinitionRow(posVal = 'n.', meaningVal = '') {
+        const container = document.getElementById('definitionsContainer');
+        if (!container) return;
+
+        const rowId = 'def_row_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 'def-row';
+        rowDiv.id = rowId;
+        rowDiv.style.cssText = 'display: flex; gap: 8px; margin-bottom: 8px; align-items: center;';
+        
+        rowDiv.innerHTML = `
+            <select class="input-pos" style="padding: 8px; min-width: 90px;">
+                <option value="n." ${posVal==='n.'?'selected':''}>n. 名詞</option>
+                <option value="v." ${posVal==='v.'?'selected':''}>v. 動詞</option>
+                <option value="adj." ${posVal==='adj.'?'selected':''}>adj. 形容詞</option>
+                <option value="adv." ${posVal==='adv.'?'selected':''}>adv. 副詞</option>
+                <option value="prep." ${posVal==='prep.'?'selected':''}>prep. 介系詞</option>
+                <option value="other" ${posVal==='other'?'selected':''}>other 其他</option>
+            </select>
+            <input type="text" class="input-meaning" placeholder="中文解釋" value="${meaningVal}" style="flex: 1; padding: 8px;" />
+            <button type="button" onclick="removeDefinitionRow('${rowId}')" style="background: #fee2e2; color: #ef4444; border: none; border-radius: 6px; padding: 6px 10px; cursor: pointer; font-weight: bold;">✕</button>
+        `;
+        container.appendChild(rowDiv);
+    }
+
+    function removeDefinitionRow(rowId) {
+        const container = document.getElementById('definitionsContainer');
+        if (container.children.length <= 1) {
+            alert('至少需要保留一組詞性與中文解釋！');
+            return;
+        }
+        document.getElementById(rowId).remove();
+    }
+
+    function resetForm() {
+        const wordInput = document.getElementById('inputWord');
+        if (wordInput) wordInput.value = '';
+        
+        const container = document.getElementById('definitionsContainer');
+        if (container) {
+            container.innerHTML = '';
+            addDefinitionRow('n.', '');
+        }
+        
+        editingWordId = null;
+
+        const formTitle = document.getElementById('formTitle');
+        if (formTitle) formTitle.innerText = '新增單字';
+
+        const submitBtn = document.getElementById('submitWordBtn');
+        if (submitBtn) submitBtn.innerText = '➕ 儲存單字至當前教材';
+
+        const cancelBtn = document.getElementById('cancelEditBtn');
+        if (cancelBtn) cancelBtn.style.display = 'none';
+    }
+
+    function saveWord() {
+        const wordInput = document.getElementById('inputWord');
+        const wordStr = wordInput ? wordInput.value.trim() : '';
+
+        if (!wordStr) {
+            alert('請輸入英文單字！');
+            return;
+        }
+        if (!currentDeckId) {
+            alert('請先選擇或新增一個教材！');
+            return;
+        }
+
+        const rows = document.querySelectorAll('#definitionsContainer .def-row');
+        let definitions = [];
+
+        rows.forEach(row => {
+            const pos = row.querySelector('.input-pos').value;
+            const meaning = row.querySelector('.input-meaning').value.trim();
+            if (meaning) {
+                definitions.push({ pos, meaning });
+            }
+        });
+
+        if (definitions.length === 0) {
+            alert('請至少填寫一個中文解釋！');
+            return;
+        }
+
+        if (editingWordId) {
+            // 編輯模式
+            const index = words.findIndex(w => w.id === editingWordId);
+            if (index !== -1) {
+                words[index].word = wordStr;
+                words[index].definitions = definitions;
+            }
+        } else {
+            // 新增模式
+            const newWord = {
+                id: Date.now(),
+                deckId: currentDeckId,
+                word: wordStr,
+                definitions: definitions
+            };
+            words.unshift(newWord);
+        }
+
+        localStorage.setItem('wordnest_words', JSON.stringify(words));
+        resetForm();
+        renderWords();
+    }
+
+    function editWord(id) {
+        const target = words.find(w => w.id === id);
+        if (!target) return;
+
+        editingWordId = id;
+        document.getElementById('formTitle').innerText = '✏️ 修改單字';
+        document.getElementById('inputWord').value = target.word;
+
+        const container = document.getElementById('definitionsContainer');
+        container.innerHTML = '';
+
+        const defs = target.definitions || [{ pos: target.pos || 'n.', meaning: target.meaning || '' }];
+        defs.forEach(d => addDefinitionRow(d.pos, d.meaning));
+
+        document.getElementById('submitWordBtn').innerText = '💾 儲存修改';
+        document.getElementById('cancelEditBtn').style.display = 'inline-block';
+
+        document.getElementById('inputWord').focus();
+    }
+
+    function cancelEdit() {
+        resetForm();
+    }
+
+    function deleteWord(id) {
+        words = words.filter(w => w.id !== id);
+        localStorage.setItem('wordnest_words', JSON.stringify(words));
+        renderWords();
+    }
+
+    function renderWords() {
+        const wordListContainer = document.getElementById('wordList');
+        if (!wordListContainer) return;
+
+        if (!currentDeckId) {
+            wordListContainer.innerHTML = `
+                <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 20px; text-align: center; color: #94a3b8;">
+                    請先選擇或新增一個教材！
+                </div>
+            `;
+            return;
+        }
+
+        const currentWords = words.filter(w => (w.deckId || 'd_default') === currentDeckId);
+
+        if (currentWords.length === 0) {
+            wordListContainer.innerHTML = `
+                <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 20px; text-align: center; color: #94a3b8;">
+                    此教材內目前沒有單字，開始新增第一個單字吧！
+                </div>
+            `;
+            return;
+        }
+
+        wordListContainer.innerHTML = currentWords.map(item => {
+            const defs = item.definitions || [{ pos: item.pos || 'n.', meaning: item.meaning || '' }];
+
+            const defsHTML = defs.map(d => `
+                <div style="display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; margin-right: 12px; font-size: 0.95rem;">
+                    <span style="font-size: 0.8rem; color: #2563eb; background: #eff6ff; padding: 2px 6px; border-radius: 4px; font-weight: 600;">${d.pos}</span>
+                    <span style="color: #334155;">${d.meaning}</span>
+                </div>
+            `).join('');
+
+            return `
+    <div draggable="true" 
+         ondragstart="onDragStart(event, ${item.id})" 
+         ondragover="onDragOver(event)" 
+         ondrop="onDrop(event, ${item.id})" 
+         ondragend="onDragEnd(event)"
+         style="background: white; border: 1px solid #e2e8f0; padding: 14px 16px; margin-bottom: 10px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s;">
+        
+        <!-- 左側：拖曳把手 ＋ 單字與釋義 -->
+        <div style="display: flex; align-items: center; gap: 12px; text-align: left;">
+            <span style="color: #94a3b8; font-size: 1.2rem; cursor: grab; user-select: none;" title="按住拖曳排序">☰</span>
+            <div>
+                <div style="font-size: 1.15rem; font-weight: 700; color: #1e293b; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+    <span>${item.word}</span>
+    <button onclick="speakWord('${item.word.replace(/'/g, "\\'")}')" style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.85rem;" title="朗讀發音">🔊</button>
+</div>
+                <div>${defsHTML}</div>
+            </div>
+        </div>
+
+        <!-- 右側：按鈕組 -->
+        <div style="display: flex; gap: 6px; flex-shrink: 0;">
+    <button onclick="moveWord(${item.id})" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">🚚 移動</button>
+    <button onclick="editWord(${item.id})" style="background: #e0e7ff; color: #3730a3; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">✏️ 編輯</button>
+    <button onclick="deleteWord(${item.id})" style="background: #fee2e2; color: #ef4444; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">🗑️ 刪除</button>
+</div>
+    </div>
+`;
+        }).join('');
+    }
+
+    // ----------------- 單字卡拖曳排序邏輯 -----------------
+let draggedWordId = null;
+
+function onDragStart(e, id) {
+    draggedWordId = id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.currentTarget.style.opacity = '0.5'; // 拖曳時讓卡片變半透明
+}
+
+function onDragOver(e) {
+    e.preventDefault(); // 必須阻止預設行為才能觸發 drop
+    e.dataTransfer.dropEffect = 'move';
+}
+
+function onDrop(e, targetId) {
+    e.preventDefault();
+    if (!draggedWordId || draggedWordId === targetId) return;
+
+    // 找到拖曳項目與目標項目的索引
+    const draggedIdx = words.findIndex(w => w.id === draggedWordId);
+    const targetIdx = words.findIndex(w => w.id === targetId);
+
+    if (draggedIdx !== -1 && targetIdx !== -1) {
+        // 交換陣列中的位置
+        const [movedItem] = words.splice(draggedIdx, 1);
+        words.splice(targetIdx, 0, movedItem);
+
+        // 儲存順序並重新繪製畫面
+        localStorage.setItem('wordnest_words', JSON.stringify(words));
+        renderWords();
+    }
+}
+
+function onDragEnd(e) {
+    e.currentTarget.style.opacity = '1'; // 拖曳結束恢復透明度
+    draggedWordId = null;
+}
+
+// ----------------- 語音朗讀功能 -----------------
+function speakWord(text) {
+    if (!('speechSynthesis' in window)) {
+        alert('您的瀏覽器不支援語音朗讀功能！');
+        return;
+    }
+    // 停止目前正在播放的語音（避免連續點擊重疊聲音）
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US'; // 設定為美式英文發音
+    utterance.rate = 0.9;     // 語速稍微調慢一點點，更適合聽清楚發音
+    
+    window.speechSynthesis.speak(utterance);
+}
+
+    // ----------------- 3. 匯入 / 預設 / OCR 功能 -----------------
+    function toggleImportArea(areaId) {
+        const target = document.getElementById(areaId);
+        const currentDisplay = target.style.display;
+        document.getElementById('batchArea').style.display = 'none';
+        document.getElementById('ocrArea').style.display = 'none';
+        target.style.display = currentDisplay === 'none' ? 'block' : 'none';
+    }
+
+    function loadPresetWords() {
+        const presets = [
+            { id: Date.now() + 1, deckId: currentDeckId, word: 'persistent', definitions: [{ pos: 'adj.', meaning: '堅持不懈的' }] },
+            { id: Date.now() + 2, deckId: currentDeckId, word: 'achieve', definitions: [{ pos: 'v.', meaning: '達成；取得' }] },
+            { id: Date.now() + 3, deckId: currentDeckId, word: 'challenge', definitions: [{ pos: 'n.', meaning: '挑戰' }] },
+            { id: Date.now() + 4, deckId: currentDeckId, word: 'opportunity', definitions: [{ pos: 'n.', meaning: '機會' }] },
+            { id: Date.now() + 5, deckId: currentDeckId, word: 'flexible', definitions: [{ pos: 'adj.', meaning: '有彈性的；靈活的' }] }
+        ];
+
+        const newWords = presets.filter(p => !words.some(w => w.word.toLowerCase() === p.word.toLowerCase()));
+        if (newWords.length === 0) {
+            alert('預設單字已經都在單字庫中囉！');
+            return;
+        }
+
+        words = [...newWords, ...words];
+        saveAndRender();
+        alert(`成功載入 ${newWords.length} 個預設單字！`);
+    }
+
+    function importBatchWords() {
+        const batchText = document.getElementById('batchInput').value.trim();
+        if (!batchText) {
+            alert('請輸入要匯入的單字內容！');
+            return;
+        }
+
+        const lines = batchText.split('\n');
+        let count = 0;
+
+        lines.forEach((line, index) => {
+            const parts = line.split(',').map(s => s.trim());
+            if (parts.length >= 2) {
+                const word = parts[0];
+                const pos = parts.length >= 3 ? parts[1] : 'other';
+                const meaning = parts.length >= 3 ? parts[2] : parts[1];
+
+                if (word && meaning) {
+                    words.unshift({
+                        id: Date.now() + index,
+                        deckId: currentDeckId,
+                        word: word,
+                        definitions: [{ pos, meaning }]
+                    });
+                    count++;
+                }
+            }
+        });
+
+        if (count > 0) {
+            saveAndRender();
+            document.getElementById('batchInput').value = '';
+            document.getElementById('batchArea').style.display = 'none';
+            alert(`成功匯入 ${count} 個單字！`);
+        } else {
+            alert('格式不符，請使用「英文,詞性,中文」格式');
+        }
+    }
+
+    function saveAndRender() {
+        localStorage.setItem('wordnest_words', JSON.stringify(words));
+        renderWords();
+    }
+
+    // ----------------- 4. 頁面載入初始化 -----------------
+    document.addEventListener('DOMContentLoaded', () => {
+        initFolderDeckSystem(); // 📍 初始化選單系統
+        resetForm();            // 📍 初始化輸入表單
+        renderWords();          // 📍 渲染單字列表
+
+        const ocrInput = document.getElementById('ocrFileInput');
+        if (ocrInput) {
+            ocrInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const statusDiv = document.getElementById('ocrStatus');
+                statusDiv.innerText = '⏳ AI 正在辨識圖片中的英文單字，請稍候...';
+
+                try {
+                    const worker = await Tesseract.createWorker('eng');
+                    const ret = await worker.recognize(file);
+                    await worker.terminate();
+
+                    const extractedWords = ret.data.text.match(/\b[A-Za-z]{3,}\b/g) || [];
+                    const uniqueWords = [...new Set(extractedWords.map(w => w.toLowerCase()))];
+
+                    if (uniqueWords.length > 0) {
+                        statusDiv.innerText = `✅ 成功辨識出 ${uniqueWords.length} 個英文單字，已填入批次區！`;
+                        document.getElementById('batchArea').style.display = 'block';
+                        document.getElementById('batchInput').value = uniqueWords.map(w => `${w}, n., [請輸入中文]`).join('\n');
+                    } else {
+                        statusDiv.innerText = '⚠️ 未能清晰辨識英文單字，請重新拍照試試。';
+                    }
+                } catch (err) {
+                    console.error(err);
+                    statusDiv.innerText = '❌ 辨識發生錯誤。';
+                }
+            });
+        }
+    });
+
+// ----------------- 1. 中文拼英文測驗邏輯 -----------------
+
+// 開始測驗總入口
+// 修改後的 startQuiz()
+async function startQuiz(mode) {
+    currentQuizMode = mode;
+    quizWords = getQuizWordsByScope();
+
+    if (quizWords.length === 0) {
+        alert('選擇的範圍內沒有單字，請先新增單字或更換測驗範圍！');
+        return;
+    }
+
+    if ((mode === 'choice' || mode === 'sentence') && words.length < 4) {
+        alert('單字庫總單字量少於 4 個，無法產生測驗！');
+        return;
+    }
+
+    quizWords = quizWords.sort(() => Math.random() - 0.5);
+    currentQuizIndex = 0;
+    quizScore = 0;
+
+    if (mode === 'spelling') {
+        renderSpellingQuestion();
+    } else if (mode === 'choice') {
+        renderChoiceQuestion();
+    } else if (mode === 'sentence') {
+        const container = document.getElementById('quizContainer');
+        
+        // 1. 渲染帶有進度條的 Loading 畫面
+        container.innerHTML = `
+            <div style="text-align: center; padding: 30px 20px;">
+                <div style="font-size: 2.5rem; margin-bottom: 12px;">🤖</div>
+                <div style="font-weight: 700; color: #1e293b; font-size: 1.1rem; margin-bottom: 14px;">
+                    AI 正在為你量身打造句子填空題...
+                </div>
+                
+                <!-- 📊 條狀進度條外框 -->
+                <div style="width: 100%; max-width: 280px; height: 12px; background: #e2e8f0; border-radius: 999px; margin: 0 auto 10px; overflow: hidden;">
+                    <div id="aiProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); border-radius: 999px; transition: width 0.2s ease;"></div>
+                </div>
+                
+                <!-- 數字進度百分比 -->
+                <div id="aiProgressPercent" style="font-size: 0.85rem; color: #2563eb; font-weight: 700; margin-bottom: 8px;">
+                    準備中 0%
+                </div>
+
+                <div style="color: #94a3b8; font-size: 0.8rem;">(若未填寫 API Key，將自動使用離線模式)</div>
+            </div>
+        `;
+
+        // 2. 啟動計時器，模擬漸進式進度 (0% -> 90%)
+        let progress = 0;
+        const progressBar = document.getElementById('aiProgressBar');
+        const progressPercent = document.getElementById('aiProgressPercent');
+
+        const progressInterval = setInterval(() => {
+            if (progress < 90) {
+                progress += Math.floor(Math.random() * 4) + 2; // 隨機增加 2% ~ 5%
+                if (progress > 90) progress = 90;
+                if (progressBar) progressBar.style.width = `${progress}%`;
+                if (progressPercent) progressPercent.innerText = `AI 生成中... ${progress}%`;
+            }
+        }, 120);
+
+        try {
+            // 3. 呼叫 AI 生成題目
+            window.aiQuizQuestions = await generateAISentenceQuestions(quizWords);
+
+            // 4. 成功取得題目，將進度條衝到 100%
+            clearInterval(progressInterval);
+            if (progressBar) progressBar.style.width = '100%';
+            if (progressPercent) progressPercent.innerText = '出題完成！ 100%';
+
+            // 稍微停頓 0.3 秒，展示 100% 後切換至題目畫面
+            setTimeout(() => {
+                renderSentenceQuestion();
+            }, 300);
+
+        } catch (error) {
+            clearInterval(progressInterval);
+            console.error('出題過程發生錯誤：', error);
+        }
+    }
+}
+
+// 渲染「中文拼英文」題目
+function renderSpellingQuestion() {
+    const container = document.getElementById('quizContainer');
+    const target = quizWords[currentQuizIndex];
+
+    // 格式化顯示所有釋義
+    const defs = target.definitions || [{ pos: target.pos || 'n.', meaning: target.meaning || '' }];
+    const defsText = defs.map(d => `<span style="background: #eff6ff; color: #2563eb; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-right: 6px;">${d.pos}</span>${d.meaning}`).join(' ');
+
+    container.innerHTML = `
+        <div style="width: 100%; max-width: 450px; text-align: center;">
+            <div style="font-size: 0.9rem; color: #64748b; font-weight: 600; margin-bottom: 12px;">
+                進度：${currentQuizIndex + 1} / ${quizWords.length}
+            </div>
+            
+            <div style="font-size: 1.3rem; font-weight: 700; color: #1e293b; margin-bottom: 20px; background: #f8fafc; padding: 16px; border-radius: 10px; border: 1px solid #e2e8f0;">
+                ${defsText}
+            </div>
+
+            <input type="text" id="spellingInput" placeholder="請輸入英文單字" autofocus 
+                   onkeydown="if(event.key==='Enter') checkSpellingAnswer()"
+                   style="width: 100%; font-size: 1.1rem; padding: 12px; border: 2px solid #cbd5e1; border-radius: 8px; text-align: center; outline: none; margin-bottom: 16px;" />
+
+            <div id="spellingFeedback" style="margin-bottom: 16px; font-weight: 600; min-height: 24px;"></div>
+
+            <button id="spellingSubmitBtn" onclick="checkSpellingAnswer()" 
+                    style="width: 100%; padding: 12px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 700; cursor: pointer;">
+                送出答案 (Enter)
+            </button>
+        </div>
+    `;
+
+    setTimeout(() => {
+        const input = document.getElementById('spellingInput');
+        if (input) input.focus();
+    }, 100);
+}
+
+// 檢查拼字答案
+function checkSpellingAnswer() {
+    const input = document.getElementById('spellingInput');
+    const feedback = document.getElementById('spellingFeedback');
+    const submitBtn = document.getElementById('spellingSubmitBtn');
+    
+    if (!input || input.disabled) return;
+
+    const userAns = input.value.trim().toLowerCase();
+    const target = quizWords[currentQuizIndex];
+    const correctAns = target.word.trim().toLowerCase();
+
+    input.disabled = true;
+
+    if (userAns === correctAns) {
+        quizScore++;
+        feedback.innerHTML = `<span style="color: #10b981; font-size: 1.1rem;">🎉 正確！</span>`;
+        if (typeof speakWord === 'function') speakWord(target.word);
+    } else {
+        feedback.innerHTML = `<span style="color: #ef4444; font-size: 1.1rem;">❌ 答錯了！正確答案是：<strong>${target.word}</strong></span>`;
+        if (typeof speakWord === 'function') speakWord(target.word);
+    }
+
+    submitBtn.innerText = currentQuizIndex + 1 < quizWords.length ? '下一題 ➔' : '查看測驗結果 🏆';
+    submitBtn.style.background = '#475569';
+    submitBtn.onclick = nextQuizQuestion;
+}
+
+// 切換至下一題或顯示結果
+function nextQuizQuestion() {
+    currentQuizIndex++;
+    if (currentQuizIndex < quizWords.length) {
+        if (currentQuizMode === 'spelling') {
+            renderSpellingQuestion();
+        } else if (currentQuizMode === 'choice') {
+            renderChoiceQuestion();
+        } else if (currentQuizMode === 'sentence') {
+            renderSentenceQuestion();
+        }
+    } else {
+        showQuizResult();
+    }
+}
+
+// 顯示最終測驗結果
+function showQuizResult() {
+    const container = document.getElementById('quizContainer');
+    const percentage = Math.round((quizScore / quizWords.length) * 100);
+
+    container.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <div style="font-size: 3rem; margin-bottom: 10px;">${percentage >= 80 ? '🎉' : '💪'}</div>
+            <h2 style="color: #1e293b; margin-bottom: 8px;">測驗完成！</h2>
+            <p style="font-size: 1.2rem; color: #475569; margin-bottom: 20px;">
+                得分：<strong style="color: #2563eb; font-size: 1.5rem;">${quizScore}</strong> / ${quizWords.length} (${percentage}分)
+            </p>
+            <button onclick="startQuiz('${currentQuizMode}')" 
+                    style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer;">
+                🔄 再測一次
+            </button>
+        </div>
+    `;
+}
+
+// ----------------- 2. 英譯中四選一測驗邏輯 -----------------
+
+// 格式化取得單字的所有中文釋義
+function getFormattedMeaning(item) {
+    const defs = item.definitions || [{ pos: item.pos || 'n.', meaning: item.meaning || '' }];
+    return defs.map(d => `<span style="font-size:0.85rem; color:#2563eb; background:#eff6ff; padding:2px 6px; border-radius:4px; font-weight:600; margin-right:4px;">${d.pos}</span>${d.meaning}`).join(' ');
+}
+
+// 渲染「英譯中四選一」題目
+function renderChoiceQuestion() {
+    const container = document.getElementById('quizContainer');
+    const target = quizWords[currentQuizIndex];
+
+    // 1. 從全庫單字中過濾掉目前題目，並隨機抽 3 個「教材內的單字」作為干擾選項
+    // 1. 從「當前測驗範圍 (quizWords)」中過濾掉目前題目，抽 3 個作為干擾選項
+let otherWords = quizWords.filter(w => w.id !== target.id);
+    otherWords = otherWords.sort(() => Math.random() - 0.5).slice(0, 3);
+
+    // 2. 組合 1 個正確答案與 3 個錯誤答案，並隨機打亂順序
+    let choices = [
+        { isCorrect: true, text: getFormattedMeaning(target) },
+        ...otherWords.map(w => ({ isCorrect: false, text: getFormattedMeaning(w) }))
+    ].sort(() => Math.random() - 0.5);
+
+    // 3. 渲染 HTML 畫面
+    const choicesHTML = choices.map((c, idx) => `
+        <button class="choice-btn" onclick="checkChoiceAnswer(${c.isCorrect}, this)" 
+                style="width: 100%; text-align: left; padding: 14px; margin-bottom: 10px; background: white; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem; cursor: pointer; transition: all 0.2s; color: #334155;">
+            <strong>${['A', 'B', 'C', 'D'][idx]}.</strong> ${c.text}
+        </button>
+    `).join('');
+
+    container.innerHTML = `
+        <div style="width: 100%; max-width: 480px; text-align: center;">
+            <div style="font-size: 0.9rem; color: #64748b; font-weight: 600; margin-bottom: 12px;">
+                進度：${currentQuizIndex + 1} / ${quizWords.length}
+            </div>
+
+            <!-- 題目英文單字 + 發音 -->
+            <div style="font-size: 1.8rem; font-weight: 800; color: #1e293b; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                <span>${target.word}</span>
+                <button onclick="speakWord('${target.word.replace(/'/g, "\\'")}')" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 50%; width: 36px; height: 36px; cursor: pointer; font-size: 1rem;" title="朗讀發音">🔊</button>
+            </div>
+
+            <!-- 四選一選項 -->
+            <div id="choiceList" style="margin-bottom: 16px;">
+                ${choicesHTML}
+            </div>
+
+            <div id="choiceFeedback" style="margin-bottom: 16px; font-weight: 600; min-height: 24px;"></div>
+
+            <button id="choiceNextBtn" onclick="nextQuizQuestion()" style="display: none; width: 100%; padding: 12px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 700; cursor: pointer;">
+                ${currentQuizIndex + 1 < quizWords.length ? '下一題 ➔' : '查看測驗結果 🏆'}
+            </button>
+        </div>
+    `;
+
+    // 自動朗讀題目的英文單字
+    if (typeof speakWord === 'function') speakWord(target.word);
+}
+
+// 檢查四選一答案
+function checkChoiceAnswer(isCorrect, btnEl) {
+    const allBtns = document.querySelectorAll('.choice-btn');
+    const feedback = document.getElementById('choiceFeedback');
+    const nextBtn = document.getElementById('choiceNextBtn');
+
+    // 停用所有選項按鈕
+    allBtns.forEach(btn => {
+        btn.disabled = true;
+        btn.style.cursor = 'default';
+    });
+
+    if (isCorrect) {
+        quizScore++;
+        btnEl.style.borderColor = '#10b981';
+        btnEl.style.background = '#ecfdf5';
+        btnEl.style.color = '#065f46';
+        feedback.innerHTML = `<span style="color: #10b981; font-size: 1.1rem;">🎉 正確！</span>`;
+    } else {
+        btnEl.style.borderColor = '#ef4444';
+        btnEl.style.background = '#fef2f2';
+        btnEl.style.color = '#991b1b';
+        feedback.innerHTML = `<span style="color: #ef4444; font-size: 1.1rem;">❌ 答錯了！</span>`;
+    }
+
+    nextBtn.style.display = 'block';
+}
+
+// ----------------- Gemini API 串接與 Prompt 設計 -----------------
+
+// 1. 金鑰讀取與寫入 (自動清除前後空白與引號)
+function getApiKey() {
+    const key = localStorage.getItem('wordnest_groq_key') || '';
+    return key.replace(/['"\s]/g, '').trim();
+}
+
+function saveApiKey() {
+    const input = document.getElementById('groqApiKey');
+    if (!input) return;
+    const key = input.value.replace(/['"\s]/g, '').trim();
+    if (!key) return alert('請輸入有效的 API Key！');
+    
+    if (!key.startsWith('gsk_')) {
+        alert('⚠️ 注意：Groq API Key 必須以 "gsk_" 開頭，請確認是否複製完整或混用到舊的金鑰！');
+    }
+
+    localStorage.setItem('wordnest_groq_key', key);
+    alert('⚡ Groq API Key 已成功儲存！');
+    testGroqApiConnection();
+}
+
+// 2. 🧪 測試 Groq API 連線 (自動匹配可用模型)
+// 1. 🔍 動態查詢該 API Key 在 Groq 目前開放的模型
+// 1. 🔍 動態查詢該 API Key 在 Groq 目前開放的模型（含 4 秒快速逾時）
+async function getAvailableGroqModel(apiKey) {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+        const res = await fetch('https://api.groq.com/openai/v1/models', {
+            headers: { 'Authorization': `Bearer ${apiKey}` },
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+            const data = await res.json();
+            if (data.data && data.data.length > 0) {
+                // 優先選擇 llama、gemma 或 qwen 模型，找不到則自動選取第一個可用模型
+                const activeModel = data.data.find(m => 
+                    m.id.includes('llama') || m.id.includes('gemma') || m.id.includes('qwen')
+                ) || data.data[0];
+                return activeModel.id;
+            }
+        }
+    } catch (e) {
+        console.warn('查詢模型列表失敗，使用預設值：', e);
+    }
+    return 'llama-3.3-70b-versatile';
+}
+
+// 2. 🧪 測試 Groq API 連線 (自動讀取你帳號可用的最新模型)
+async function testGroqApiConnection() {
+    const apiKey = getApiKey();
+    const statusEl = document.getElementById('apiStatusText');
+
+    if (!apiKey) {
+        if (statusEl) statusEl.innerHTML = '<span style="color: #ef4444;">❌ 未設定 API Key！</span>';
+        alert('請先輸入 API Key 並點擊儲存！');
+        return;
+    }
+
+    if (statusEl) {
+        statusEl.innerHTML = `<span style="color: #3b82f6;">⏳ 正在向 Groq 查詢你帳號支援的模型...</span>`;
+    }
+
+    try {
+        // 第一步：向 Groq API 查詢你的 Key 權限下有哪些現成模型
+        const targetModel = await getAvailableGroqModel(apiKey);
+
+        if (statusEl) {
+            statusEl.innerHTML = `<span style="color: #3b82f6;">⏳ 嘗試連線至模型 <code>${targetModel}</code>...</span>`;
+        }
+
+        // 第二步：使用查詢到的有效模型進行發送測試
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            signal: controller.signal,
+            body: JSON.stringify({
+                model: targetModel,
+                messages: [{ role: 'user', content: 'hi' }],
+                max_tokens: 5
+            })
+        });
+
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+            if (statusEl) statusEl.innerHTML = `<span style="color: #10b981;">✅ Groq AI 連線成功！(啟用模型：${targetModel})</span>`;
+            alert(`🎉 恭喜！Groq API 連線成功！\n已為你自動匹配可用的模型：${targetModel}`);
+        } else {
+            const errJson = await response.json().catch(() => ({}));
+            const errMsg = errJson.error?.message || `HTTP ${response.status}`;
+            if (statusEl) statusEl.innerHTML = `<span style="color: #ef4444;">❌ 連線失敗 (${errMsg})</span>`;
+            alert(`⚠️ 連線失敗：${errMsg}`);
+        }
+    } catch (err) {
+        let detail = err.name === 'AbortError' ? '連線逾時' : err.message;
+        if (statusEl) statusEl.innerHTML = `<span style="color: #ef4444;">❌ 連線異常：${detail}</span>`;
+        alert(`⚠️ 連線異常：\n${detail}`);
+    }
+}
+
+// ==========================================
+// 💡 WordNest AI 句子填空模組 (完整防呆修復版)
+// ==========================================
+
+// 1. 💡 中文翻譯展開/折疊切換 (預設隱藏，點擊燈泡展開)
+window.toggleTranslation = function() {
+    const el = document.getElementById('sentenceTranslation');
+    const btn = document.getElementById('toggleTransBtn');
+    if (!el) return;
+
+    if (el.style.display === 'none' || el.style.display === '') {
+        el.style.display = 'block';
+        if (btn) {
+            btn.style.background = '#e0f2fe';
+            btn.style.borderColor = '#0284c7';
+            btn.style.color = '#0369a1';
+        }
+    } else {
+        el.style.display = 'none';
+        if (btn) {
+            btn.style.background = '#f1f5f9';
+            btn.style.borderColor = '#cbd5e1';
+            btn.style.color = '#475569';
+        }
+    }
+};
+
+// 2. 🛡️ 離線備用題庫生成器 (內建高頻單字庫)
+function createGuaranteedFallbackQuestions(wordsToTest) {
+    const distractorsPool = [
+        'instruction', 'description', 'suggestion', 'connection', 'achievement', 
+        'confidence', 'perspective', 'substantial', 'deliberate', 'efficient', 
+        'flexible', 'fundamental', 'guarantee', 'hesitate', 'impression'
+    ];
+
+    const pool = (wordsToTest && Array.isArray(wordsToTest) && wordsToTest.length > 0) 
+        ? wordsToTest 
+        : [{ word: 'persistent', meaning: '堅持不懈的' }];
+
+    return pool.map(w => {
+        const target = String(w.word || 'target').trim();
+        const meaning = String(w.meaning || (w.definitions ? w.definitions.map(d => d.meaning).join(', ') : '此單字'));
+        
+        const distractors = distractorsPool
+            .filter(d => d.toLowerCase() !== target.toLowerCase())
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 3);
+        
+        const options = [target, ...distractors].sort(() => Math.random() - 0.5);
+
+        return {
+            word: target,
+            sentence: `It is essential to stay ______ and focused when facing challenging situations.`,
+            translation: `面對具挑戰性的情況時，保持與專注是至關重要的。（提示：${meaning}）`,
+            options: options,
+            correctIndex: options.indexOf(target)
+        };
+    });
+}
+
+// 3. 🧼 資料清洗器 (自動過濾中文括號)
+function sanitizeQuestions(rawList, fallbackWords) {
+    try {
+        let list = Array.isArray(rawList) && rawList.length > 0 ? rawList : null;
+        if (!list) {
+            list = createGuaranteedFallbackQuestions(fallbackWords);
+        }
+
+        const sanitized = list.map((item) => {
+            const targetWord = String(item.word || item.target || 'word');
+            
+            let sentence = String(item.sentence || item.question || item.sentencePattern || 'Fill in the blank: ______');
+            sentence = sentence.replace(/[\(（][^\)）]*[\)）]/g, '').trim();
+
+            if (!sentence.includes('______')) {
+                sentence = sentence.replace(/_+/g, '______');
+                if (!sentence.includes('______')) sentence += ' ______';
+            }
+
+            const translation = String(item.translation || item.meaning || item.chinese || '');
+            
+            let options = [];
+            if (Array.isArray(item.options)) {
+                options = item.options.map(opt => typeof opt === 'object' ? String(opt.text || Object.values(opt)[0]) : String(opt));
+            }
+
+            while (options.length < 4) {
+                options.push(`選項 ${options.length + 1}`);
+            }
+
+            let correctIndex = Number(item.correctIndex);
+            if (isNaN(correctIndex) || correctIndex < 0 || correctIndex >= options.length) {
+                const foundIdx = options.findIndex(opt => opt.toLowerCase().trim() === targetWord.toLowerCase().trim());
+                correctIndex = foundIdx !== -1 ? foundIdx : 0;
+            }
+
+            return {
+                word: targetWord,
+                sentence: sentence,
+                translation: translation,
+                options: options.slice(0, 4),
+                correctIndex: correctIndex
+            };
+        });
+
+        return sanitized.length > 0 ? sanitized : createGuaranteedFallbackQuestions(fallbackWords);
+    } catch (e) {
+        console.warn('清洗過程發生例外，切換至救援題庫：', e);
+        return createGuaranteedFallbackQuestions(fallbackWords);
+    }
+}
+
+// 4. 🤖 Groq AI 句子填空生成函數
+async function generateAISentenceQuestions(wordsToTest) {
+    const apiKey = getApiKey();
+    if (!apiKey) return createGuaranteedFallbackQuestions(wordsToTest);
+
+    const wordPayload = wordsToTest.map(w => ({
+        word: w.word,
+        meaning: w.definitions ? w.definitions.map(d => `${d.pos} ${d.meaning}`).join('; ') : (w.meaning || '')
+    }));
+
+    const prompt = `你是一位專業的高中英文老師。請為以下單字生成「例句填空選擇題」：
+${JSON.stringify(wordPayload)}
+
+要求：
+1. 每個單字生成 1 題，例句難度符合高中英文，將目標單字挖空替換為 "______"。
+2. ⚠️ 注意：例句 (sentence) 必須完全為純英文，絕對不要在例句中或後方加上任何中文意思或中文括號提示！
+3. 提供 4 個選項（1個正確單字，3個高中難度干擾單字）與中文翻譯 (translation)。
+4. 請直接回傳 JSON 物件，格式如下：
+{
+  "questions": [
+    {
+      "word": "目標單字",
+      "sentence": "The teacher gave us a clear ______ to follow.",
+      "translation": "老師給了我們一個清晰的指示去遵循。",
+      "options": ["instruction", "description", "suggestion", "connection"],
+      "correctIndex": 0
+    }
+  ]
+}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+        const activeModel = await getAvailableGroqModel(apiKey);
+
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            signal: controller.signal,
+            body: JSON.stringify({
+                model: activeModel,
+                messages: [{ role: 'user', content: prompt }],
+                response_format: { type: "json_object" }
+            })
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (!content) throw new Error('AI 回傳內容空白');
+
+        const cleanText = content.replace(/```json/gi, '').replace(/```/gi, '').trim();
+        const parsed = JSON.parse(cleanText);
+        const rawList = parsed.questions || parsed.data || (Array.isArray(parsed) ? parsed : Object.values(parsed)[0]);
+
+        return sanitizeQuestions(rawList, wordsToTest);
+
+    } catch (error) {
+        clearTimeout(timeoutId);
+        console.warn('AI 出題連線異常，切換離線題庫：', error);
+        return createGuaranteedFallbackQuestions(wordsToTest);
+    }
+}
+
+// 5. 🎨 UI 渲染函數
+window.renderSentenceQuestion = function() {
+    const container = document.getElementById('quizContainer');
+    if (!container) return;
+
+    window.currentQuizIndex = window.currentQuizIndex || 0;
+    window.quizScore = window.quizScore || 0;
+
+    let questions = window.aiQuizQuestions;
+    
+    if (!questions || !Array.isArray(questions) || questions.length === 0) {
+        console.warn('aiQuizQuestions 為空，自動觸發救援機制...');
+        window.aiQuizQuestions = createGuaranteedFallbackQuestions(window.quizWords);
+        questions = window.aiQuizQuestions;
+    }
+
+    if (window.currentQuizIndex >= questions.length) {
+        container.innerHTML = `
+            <div style="padding: 36px 20px; text-align: center;">
+                <div style="font-size: 3.5rem; margin-bottom: 12px;">🎉</div>
+                <h2 style="color: #1e293b; margin-bottom: 8px;">測驗完成！</h2>
+                <p style="font-size: 1.25rem; color: #2563eb; font-weight: 700; margin-bottom: 20px;">
+                    總得分：${window.quizScore} / ${questions.length * 10} 分
+                </p>
+                <button onclick="location.reload()" style="padding: 10px 24px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    再測驗一次
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    const q = questions[window.currentQuizIndex];
+
+    container.innerHTML = `
+        <div style="padding: 20px; text-align: left; max-width: 600px; margin: 0 auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <span style="font-weight: 700; color: #64748b; font-size: 0.95rem;">
+                    🎯 題目 ${window.currentQuizIndex + 1} / ${questions.length}
+                </span>
+                <span style="font-weight: 700; color: #2563eb; font-size: 0.95rem;">
+                    得分：${window.quizScore}
+                </span>
+            </div>
+
+            <div style="font-size: 1.15rem; font-weight: 700; color: #1e293b; margin-bottom: 14px; line-height: 1.6; background: #f8fafc; padding: 18px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                ${q.sentence}
+            </div>
+
+            <!-- 💡 點擊燈泡按鈕才展開翻譯 -->
+            <div style="margin-bottom: 20px;">
+                <button type="button" id="toggleTransBtn" onclick="window.toggleTranslation()" 
+                        style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 20px; padding: 6px 14px; font-size: 0.85rem; color: #475569; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                    💡 點擊看中文翻譯
+                </button>
+                
+                <div id="sentenceTranslation" style="display: none; margin-top: 10px; font-size: 0.95rem; color: #334155; background: #f8fafc; padding: 12px 16px; border-radius: 8px; border-left: 4px solid #3b82f6; line-height: 1.5;">
+                    ${q.translation || '無翻譯'}
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 20px;">
+                ${q.options.map((opt, idx) => `
+                    <button type="button" class="quiz-opt-btn" id="opt-btn-${idx}" onclick="window.checkSentenceAnswer(${idx})" 
+                            style="padding: 14px 18px; background: white; border: 2px solid #cbd5e1; border-radius: 10px; font-size: 1rem; font-weight: 600; color: #334155; cursor: pointer; text-align: left; transition: all 0.2s;">
+                        ${String.fromCharCode(65 + idx)}. ${opt}
+                    </button>
+                `).join('')}
+            </div>
+        </div>
+    `;
+};
+
+// 6. 🎯 對答案邏輯 (按鈕變色，自動播放發音，0.8秒平滑切換)
+window.checkSentenceAnswer = function(selectedIndex) {
+    const questions = window.aiQuizQuestions;
+    if (!questions || !questions[window.currentQuizIndex]) return;
+
+    const q = questions[window.currentQuizIndex];
+    const buttons = document.querySelectorAll('.quiz-opt-btn');
+    
+    buttons.forEach(btn => btn.style.pointerEvents = 'none');
+
+    const isCorrect = selectedIndex === q.correctIndex;
+    const selectedBtn = document.getElementById(`opt-btn-${selectedIndex}`);
+    const correctBtn = document.getElementById(`opt-btn-${q.correctIndex}`);
+
+    if (isCorrect) {
+        window.quizScore = (window.quizScore || 0) + 10;
+        if (selectedBtn) {
+            selectedBtn.style.background = '#dcfce7';
+            selectedBtn.style.borderColor = '#22c55e';
+            selectedBtn.style.color = '#15803d';
+        }
+    } else {
+        if (selectedBtn) {
+            selectedBtn.style.background = '#fee2e2';
+            selectedBtn.style.borderColor = '#ef4444';
+            selectedBtn.style.color = '#b91c1c';
+        }
+        if (correctBtn) {
+            correctBtn.style.background = '#dcfce7';
+            correctBtn.style.borderColor = '#22c55e';
+            correctBtn.style.color = '#15803d';
+        }
+    }
+
+    // 若頁面支援單字發音，答題時自動朗讀
+    if (typeof speakWord === 'function' && q.word) {
+        speakWord(q.word);
+    }
+
+    setTimeout(() => {
+        window.currentQuizIndex = (window.currentQuizIndex || 0) + 1;
+        window.renderSentenceQuestion();
+    }, 800);
+};
+</script>
+<!-- 🚚 移動選擇彈窗 -->
+<div id="moveModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.4); justify-content: center; align-items: center; z-index: 1000;">
+    <div style="background: white; padding: 20px 24px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.15);">
+        <h3 id="moveModalTitle" style="margin-top: 0; margin-bottom: 8px; color: #1e293b; font-size: 1.15rem;">🚚 移動位置</h3>
+        <p id="moveModalText" style="color: #64748b; font-size: 0.9rem; margin-bottom: 14px;"></p>
+        
+        <select id="moveTargetSelect" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 1rem; margin-bottom: 20px; outline: none;"></select>
+        
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button type="button" onclick="closeMoveModal()" style="padding: 8px 16px; background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-weight: 600;">取消</button>
+            <button type="button" id="confirmMoveBtn" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">確定移動</button>
+        </div>
+    </div>
+</div>
+</body>
+</html>
