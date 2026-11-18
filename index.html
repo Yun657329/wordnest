@@ -1000,6 +1000,10 @@ function speakWord(text) {
             alert('格式不符，請使用「英文,詞性,中文」格式');
         }
     }
+    function saveAndRender() {
+        localStorage.setItem('wordnest_words', JSON.stringify(words));
+        renderWords();
+    }
     // ----------------- 🖼️ 圖片壓縮與雙引擎 OCR 工具函式 -----------------
 
     // 1. 壓縮照片為適合 AI 辨識的 Base64
