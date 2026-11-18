@@ -76,6 +76,26 @@
         .tab-btn.active { background: #ffffff; color: #2563eb; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
+        /* 1. 放大批次貼上/手打單字的輸入框 */
+#batchInput {
+    width: 100% !important;
+    min-height: 240px !important; /* 高度放大，一次可容納約 10~12 行 */
+    padding: 12px !important;
+    font-size: 1rem !important;
+    line-height: 1.6 !important;
+    border: 1.5px solid #cbd5e1 !important;
+    border-radius: 10px !important;
+    resize: vertical !important; /* 允許右下角自由上下拉大 */
+    box-sizing: border-box !important;
+}
+
+/* 2. 讓 OCR 狀態提示文字可以自動換行，不被截斷成 ... */
+#ocrStatus {
+    white-space: normal !important;
+    word-break: break-word !important;
+    line-height: 1.5 !important;
+    margin-top: 10px !important;
+}
     </style>
 </head>
 <body>
@@ -164,9 +184,15 @@
 
     <!-- 批次匯入面板 (預設隱藏) -->
     <div id="batchArea" style="display: none; background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
-        <h4 style="margin: 0 0 8px 0;">📝 批次貼上單字 (格式: 英文,詞性,中文 每行一個)</h4>
-        <textarea id="batchInput" rows="4" style="width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; font-family: monospace;" placeholder="achieve, v., 達成&#10;challenge, n., 挑戰"></textarea>
-        <button class="primary-btn" onclick="importBatchWords()" style="margin-top: 8px; width: 100%;">匯入這些單字</button>
+        <h4 style="margin: 0 0 6px 0;">📝 批次貼上單字 (格式: 英文,詞性,中文 每行一個)</h4>
+        <p style="margin: 0 0 8px 0; font-size: 0.85rem; color: #64748b;">
+            💡 <b>最省事技巧：</b>用 iPhone/Mac 相機或相簿的「原況文字」複製課本單字表 ➔ 貼進下方框框 ➔ 點擊黃色按鈕自動去除音標！
+        </p>
+        <textarea id="batchInput" rows="4" style="width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; font-family: monospace;" placeholder="可直接貼上含音標的課本文字，例如：&#10;terminate ['tɝməˌnet] vi./vt. 使…終止；使…結束&#10;terminal ['tɝmən!] n. (火車、巴士)終點站"></textarea>
+        <button type="button" onclick="autoFormatPastedWords()" style="margin-top: 8px; width: 100%; padding: 10px; background: #fef3c7; color: #92400e; border: 1.5px solid #f59e0b; border-radius: 8px; font-weight: bold; cursor: pointer;">
+            🪄 自動去音標與排版（貼上照片文字後點我）
+        </button>
+        <button class="primary-btn" onclick="importBatchWords()" style="margin-top: 8px; width: 100%; padding: 10px;">匯入這些單字</button>
     </div>
 
     <!-- OCR 面板 (預設隱藏) -->
@@ -867,6 +893,65 @@ function speakWord(text) {
         alert(`成功載入 ${newWords.length} 個預設單字！`);
     }
 
+    // 🪄 一鍵整理從 iPhone / Mac 照片複製下來的單字表（自動去音標、統一詞性、拆多義）
+    function autoFormatPastedWords() {
+        const textarea = document.getElementById('batchInput');
+        const raw = textarea.value.trim();
+        if (!raw) {
+            alert('請先從照片複製單字表文字，並貼到這個輸入框裡！');
+            return;
+        }
+
+        // 1. 清除 [KK音標]、誤判成圓括號的音標，以及 【三民(乙)R2 等課本標籤
+        const cleaned = raw
+            .replace(/\[[^\]]*\]/g, ' ')
+            .replace(/\([^)]*[ɝəʃɪʊʌæɔŋθðˌˈ][^)]*\)?/g, ' ')
+            .replace(/【[^】\n]*】?/g, ' ');
+
+        const lines = cleaned.split('\n').map(l => l.trim()).filter(Boolean);
+        const posPrefixRegex = /^(vi\.\/vt\.|vt\.\/vi\.|vt\.|vi\.|v\.|adj\.|adv\.|n\.|prep\.|conj\.|pron\.|int\.)\s*(.*)$/i;
+        const results = [];
+        let currentWord = '';
+
+        for (const line of lines) {
+            let rest = line;
+
+            // 若不是以「詞性」開頭，就抓取該行開頭的英文單字
+            if (!posPrefixRegex.test(line)) {
+                const wordMatch = line.match(/^([a-zA-Z][a-zA-Z-]{1,})\s*(.*)$/);
+                if (wordMatch) {
+                    currentWord = wordMatch[1].toLowerCase();
+                    rest = wordMatch[2].trim();
+                }
+            }
+
+            if (!currentWord || !rest) continue;
+
+            // 2. 偵測詞性並統一為系統支援的格式
+            let pos = 'other';
+            if (/\b(vi\.\/vt\.|vt\.\/vi\.|vt\.|vi\.|v\.)/i.test(rest)) pos = 'v.';
+            else if (/\badj\./i.test(rest)) pos = 'adj.';
+            else if (/\badv\./i.test(rest)) pos = 'adv.';
+            else if (/\bn\./i.test(rest)) pos = 'n.';
+
+            // 3. 移除詞性標記，保留純中文解釋並將半形逗號轉全形分號
+            const meaning = rest
+                .replace(/\b(vi\.\/vt\.|vt\.\/vi\.|vt\.|vi\.|v\.|adj\.|adv\.|n\.|prep\.|conj\.|pron\.|int\.)/gi, '')
+                .replace(/,/g, '；')
+                .trim();
+
+            if (meaning) {
+                results.push(`${currentWord}, ${pos}, ${meaning}`);
+            }
+        }
+
+        if (results.length > 0) {
+            textarea.value = results.join('\n');
+        } else {
+            alert('無法自動辨識，請確認貼上的內容同時包含英文單字與中文解釋。');
+        }
+    }
+
     function importBatchWords() {
         const batchText = document.getElementById('batchInput').value.trim();
         if (!batchText) {
@@ -875,9 +960,9 @@ function speakWord(text) {
         }
 
         const lines = batchText.split('\n');
-        let count = 0;
+        const groupedMap = new Map();
 
-        lines.forEach((line, index) => {
+        lines.forEach((line) => {
             const parts = line.split(',').map(s => s.trim());
             if (parts.length >= 2) {
                 const word = parts[0];
@@ -885,15 +970,25 @@ function speakWord(text) {
                 const meaning = parts.length >= 3 ? parts[2] : parts[1];
 
                 if (word && meaning) {
-                    words.unshift({
-                        id: Date.now() + index,
-                        deckId: currentDeckId,
-                        word: word,
-                        definitions: [{ pos, meaning }]
-                    });
-                    count++;
+                    const key = word.toLowerCase();
+                    if (!groupedMap.has(key)) {
+                        groupedMap.set(key, { word, definitions: [] });
+                    }
+                    groupedMap.get(key).definitions.push({ pos, meaning });
                 }
             }
+        });
+
+        let count = 0;
+        const entries = Array.from(groupedMap.values()).reverse();
+        entries.forEach((entry, index) => {
+            words.unshift({
+                id: Date.now() + index,
+                deckId: currentDeckId,
+                word: entry.word,
+                definitions: entry.definitions
+            });
+            count++;
         });
 
         if (count > 0) {
@@ -905,15 +1000,9 @@ function speakWord(text) {
             alert('格式不符，請使用「英文,詞性,中文」格式');
         }
     }
-
-    function saveAndRender() {
-        localStorage.setItem('wordnest_words', JSON.stringify(words));
-        renderWords();
-    }
-
     // ----------------- 🖼️ 圖片壓縮與雙引擎 OCR 工具函式 -----------------
-    
-    // 1. 壓縮照片為適合 AI 辨識的 Base64 (解決 iPhone 照片過大逾時問題)
+
+    // 1. 壓縮照片為適合 AI 辨識的 Base64
     function compressImageForAI(file, maxWidth = 1280) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -943,115 +1032,162 @@ function speakWord(text) {
         });
     }
 
-    // 2. 引擎 A：Groq Vision AI 辨識 (自動抓取英文 + 詞性 + 中文)
+    // 2. 引擎 A：Groq AI 辨識 (排除安全審查模型 + 強制 JSON 結構化輸出)
     async function extractWordsWithGroqVision(file, apiKey) {
         const base64Image = await compressImageForAI(file);
 
-        // 動態查詢帳號支援的視覺模型 (Scout / Maverick / Vision)
-        let visionModel = 'meta-llama/llama-4-scout-17b-16e-instruct';
+        const promptText = `你是一個專門處理台灣高中英文單字書的助手。請從資料中提取英文單字表，並嚴格遵守以下規則：
+1. **絕對忽略**中括號內的 KK 音標（例如 ['tɝməˌnet]）或任何音標變成的亂碼（如 viv、hak、beeee 等）。
+2. **絕對忽略**課本出處標籤（例如【三民(乙)R2】等符號）。
+3. 詞性請統一標準化為以下其中一種：n.、v.、adj.、adv.、other（例如 vt.、vi.、vi./vt. 請一律轉為 v.）。
+4. 若同一個單字有多個詞性與解釋（例如 terminal 同時有 n. 和 adj.），請拆成多筆列出。
+5. 請務必只回傳符合以下格式的純 JSON 物件：
+{"words": [{"word":"terminate","pos":"v.","meaning":"使…終止；使…結束"},{"word":"terminal","pos":"n.","meaning":"(火車、巴士)終點站"}]}`;
+
+        // 輔助函式：安全解析 JSON (支援物件 {"words":[...]} 與陣列 [...]，並過濾 <think> 標籤)
+        const parseAiJsonToLines = (rawText) => {
+            const cleaned = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            let items = null;
+
+            try {
+                const parsed = JSON.parse(cleaned);
+                items = Array.isArray(parsed)
+                    ? parsed
+                    : (parsed.words || parsed.items || Object.values(parsed).find(Array.isArray));
+            } catch (_) {
+                const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
+                if (arrayMatch) {
+                    items = JSON.parse(arrayMatch[0]);
+                }
+            }
+
+            if (!Array.isArray(items) || items.length === 0) {
+                throw new Error('AI 未回傳有效單字清單');
+            }
+
+            return items
+                .filter(item => item && item.word && item.meaning)
+                .map(item => `${String(item.word).trim()}, ${String(item.pos || 'other').trim()}, ${String(item.meaning).replace(/,/g, '；').trim()}`);
+        };
+
+        // 過濾掉 guard (安全審查)、whisper (語音)、tts 等非對話模型
+        const isUsableChatModel = (id) => {
+            const lower = id.toLowerCase();
+            return !['guard', 'whisper', 'tts', 'playai', 'embed', 'moderation', 'safeguard'].some(bad => lower.includes(bad));
+        };
+
+        // 1. 查詢帳號可用模型
+        let availableModels = [];
         try {
             const modelRes = await fetch('https://api.groq.com/openai/v1/models', {
                 headers: { 'Authorization': `Bearer ${apiKey}` }
             });
             if (modelRes.ok) {
                 const modelData = await modelRes.json();
-                const found = (modelData.data || []).find(m =>
-                    m.id.includes('scout') || m.id.includes('maverick') || m.id.includes('vision')
-                );
-                if (found) visionModel = found.id;
+                availableModels = (modelData.data || []).map(m => m.id).filter(isUsableChatModel);
             }
         } catch (e) {
-            console.warn('查詢視覺模型失敗，使用預設模型：', e);
+            console.warn('查詢模型清單失敗：', e);
         }
 
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: visionModel,
-                temperature: 0.1,
-                messages: [
-                    {
-                        role: 'user',
-                        content: [
+        // 2. 篩選真正的多模態視覺模型 (排除 llama-guard)
+        const visionKeywords = ['vision', 'maverick', 'scout', 'pixtral', 'vl', 'llava'];
+        const candidateVisionModels = availableModels.filter(id =>
+            visionKeywords.some(kw => id.toLowerCase().includes(kw))
+        );
+
+        // 3. 嘗試可用視覺模型
+        for (const vModel of candidateVisionModels) {
+            try {
+                const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: vModel,
+                        temperature: 0.1,
+                        messages: [
                             {
-                                type: 'text',
-                                text: '請辨識這張圖片中的所有英文單字。若圖片有附上詞性（請統一轉為 n. / v. / adj. / adv. / other）與繁體中文解釋，請一併提取；若圖片沒有中文解釋，請自動幫該單字補上簡潔的繁體中文解釋。請只回傳純 JSON 陣列，不要任何 Markdown 標記或額外文字。格式範例：[{"word":"persistent","pos":"adj.","meaning":"堅持不懈的"}]'
-                            },
-                            {
-                                type: 'image_url',
-                                image_url: { url: base64Image }
+                                role: 'user',
+                                content: [
+                                    { type: 'text', text: promptText },
+                                    { type: 'image_url', image_url: { url: base64Image } }
+                                ]
                             }
                         ]
-                    }
-                ]
-            })
-        });
+                    })
+                });
 
-        if (!response.ok) {
-            const err = await response.json().catch(() => ({}));
-            throw new Error(err.error?.message || `HTTP ${response.status}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    return parseAiJsonToLines(data.choices[0].message.content.trim());
+                }
+            } catch (e) {
+                console.warn(`視覺模型 ${vModel} 失敗，嘗試備援模式：`, e);
+            }
         }
 
-        const data = await response.json();
-        const rawText = data.choices[0].message.content.trim();
-        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-        if (!jsonMatch) throw new Error('AI 回傳格式無法解析');
-
-        const items = JSON.parse(jsonMatch[0]);
-        // 將中文裡的半形逗號轉為全形分號，避免影響批次匯入的逗號切割
-        return items
-            .filter(item => item.word && item.meaning)
-            .map(item => `${item.word.trim()}, ${(item.pos || 'other').trim()}, ${item.meaning.replace(/,/g, '；').trim()}`);
-    }
-
-    // 3. 引擎 B：高對比黑白處理 + 純英文白名單 Tesseract (離線備援)
-    async function extractWordsWithEnhancedTesseract(file) {
-        const bwDataUrl = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const scale = Math.min(1, 1200 / img.width);
-                    canvas.width = img.width * scale;
-                    canvas.height = img.height * scale;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-                    // 二值化處理：消除紙張陰影與反光
-                    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const d = imgData.data;
-                    for (let i = 0; i < d.length; i += 4) {
-                        const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-                        const val = gray > 145 ? 255 : 0;
-                        d[i] = d[i + 1] = d[i + 2] = val;
-                    }
-                    ctx.putImageData(imgData, 0, 0);
-                    resolve(canvas.toDataURL('image/png'));
-                };
-                img.onerror = reject;
-                img.src = e.target.result;
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-
+       // 4. 改用「本機 OCR 讀字 + Groq 帳號內實際可用文字模型淨化」
         const worker = await Tesseract.createWorker('eng');
-        // 限制只允許英文字母與連字號，徹底排除中文字變亂碼
-        await worker.setParameters({
-            tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ- '
-        });
-        const ret = await worker.recognize(bwDataUrl);
+        const ret = await worker.recognize(file);
         await worker.terminate();
 
-        const extractedWords = ret.data.text
+        const rawOcrText = ret.data.text;
+        const textModels = availableModels.filter(id => !candidateVisionModels.includes(id));
+        if (textModels.length === 0) {
+            throw new Error('帳號內無可用文字模型');
+        }
+
+        let lastErr = '文字模型呼叫失敗';
+        for (const textModel of textModels.slice(0, 4)) {
+            try {
+                const textResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: textModel,
+                        temperature: 0.1,
+                        messages: [
+                            {
+                                role: 'user',
+                                content: `${promptText}\n\n以下是從單字表照片掃描出的原始文字（包含許多 KK 音標誤判的亂碼，請只挑出真正合法的英文單字，並補上正確詞性與繁體中文解釋）：\n${rawOcrText}`
+                            }
+                        ]
+                    })
+                });
+
+                if (textResponse.ok) {
+                    const textData = await textResponse.json();
+                    return parseAiJsonToLines(textData.choices[0].message.content.trim());
+                }
+                const err = await textResponse.json().catch(() => ({}));
+                lastErr = err.error?.message || `HTTP ${textResponse.status}`;
+            } catch (e) {
+                lastErr = e.message;
+            }
+        }
+        throw new Error(lastErr);
+    }
+
+    // 3. 引擎 B：純離線本機 Tesseract 備援 (過濾音標括號與重複字母亂碼)
+    async function extractWordsWithEnhancedTesseract(file) {
+        const worker = await Tesseract.createWorker('eng');
+        const ret = await worker.recognize(file);
+        await worker.terminate();
+
+        const cleanedText = ret.data.text
+            .replace(/\[[^\]]*\]/g, ' ')
+            .replace(/[\(\{I|l1]['ˈˌ][^\]\)\}\n]*[\]\)\}]/g, ' ');
+
+        const extractedWords = cleanedText
             .split(/\s+/)
             .map(w => w.replace(/[^a-zA-Z-]/g, '').toLowerCase())
-            .filter(w => w.length >= 3);
+            .filter(w => w.length >= 4 && !['adj', 'adv', 'prep', 'conj', 'pron'].includes(w) && !/(.)\1{2,}/.test(w));
 
         const uniqueWords = [...new Set(extractedWords)];
         return uniqueWords.map(w => `${w}, n., [請輸入中文]`);
@@ -1059,9 +1195,9 @@ function speakWord(text) {
 
     // ----------------- 4. 頁面載入初始化 -----------------
     document.addEventListener('DOMContentLoaded', () => {
-        initFolderDeckSystem(); // 📍 初始化選單系統
-        resetForm();            // 📍 初始化輸入表單
-        renderWords();          // 📍 渲染單字列表
+        initFolderDeckSystem();
+        resetForm();
+        renderWords();
 
         const ocrInput = document.getElementById('ocrFileInput');
         if (ocrInput) {
@@ -1070,36 +1206,43 @@ function speakWord(text) {
                 if (!file) return;
 
                 const statusDiv = document.getElementById('ocrStatus');
-                const apiKey = (localStorage.getItem('groq_api_key') || '').trim();
+                // ✅ 優先呼叫網頁原本的 getApiKey() 函式，確保能抓到已儲存的金鑰
+                const rawKey = (typeof getApiKey === 'function')
+                    ? getApiKey()
+                    : (localStorage.getItem('groq_api_key') || '');
+                const apiKey = String(rawKey).trim();
+
                 let formattedLines = [];
 
                 try {
                     if (apiKey) {
-                        statusDiv.innerText = '🤖 Groq 視覺 AI 正在判讀照片並自動翻譯中文...';
+                        statusDiv.innerText = '🤖 Groq 視覺 AI 正在判讀單字、詞性與中文解釋...';
                         try {
                             formattedLines = await extractWordsWithGroqVision(file, apiKey);
                         } catch (aiErr) {
-                            console.warn('Groq 視覺辨識失敗，自動切換本機引擎：', aiErr);
-                            statusDiv.innerText = '⚠️ AI 視覺暫時無法使用，切換為高對比本機 OCR 辨識中...';
+                            console.error('Groq Vision 錯誤：', aiErr);
+                            // 顯示具體 AI 失敗原因，方便排查，同時切換備援引擎
+                            statusDiv.innerText = `⚠️ AI 視覺連線異常 (${aiErr.message})，改用本機純英文辨識...`;
                             formattedLines = await extractWordsWithEnhancedTesseract(file);
                         }
                     } else {
-                        statusDiv.innerText = '⏳ 正在進行影像增強與純英文 OCR 辨識（建議設定 API Key 可自動抓取中文）...';
+                        statusDiv.innerText = '⏳ 未偵測到 API Key，使用本機純英文 OCR 辨識中...';
                         formattedLines = await extractWordsWithEnhancedTesseract(file);
                     }
 
                     if (formattedLines.length > 0) {
-                        statusDiv.innerText = `✅ 成功辨識出 ${formattedLines.length} 個單字，已自動填入下方批次匯入區！`;
+                        if (!statusDiv.innerText.includes('⚠️')) {
+                            statusDiv.innerText = `✅ 成功辨識出 ${formattedLines.length} 筆單字資料，已填入下方批次匯入區！`;
+                        }
                         document.getElementById('batchArea').style.display = 'block';
                         document.getElementById('batchInput').value = formattedLines.join('\n');
                     } else {
-                        statusDiv.innerText = '⚠️ 未能清晰辨識英文單字，請拉近鏡頭並保持光線充足後重試。';
+                        statusDiv.innerText = '⚠️ 未能清晰辨識英文單字，請拉近鏡頭後重試。';
                     }
                 } catch (err) {
                     console.error(err);
                     statusDiv.innerText = `❌ 辨識發生錯誤：${err.message}`;
                 } finally {
-                    // 清空 input 值，確保下次重新拍照或選同一張圖時能正常觸發 change 事件
                     e.target.value = '';
                 }
             });
